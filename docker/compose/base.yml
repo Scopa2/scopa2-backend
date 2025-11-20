@@ -1,0 +1,37 @@
+services:
+    # App
+    app:
+        container_name: '${CONTAINER_NAME}'
+        build:
+            dockerfile: Dockerfile
+            context: ../
+        image: '${CONTAINER_NAME}'
+        restart: '${RESTART_POLICY}'
+        working_dir: '/var/www/${CONTAINER_NAME}'
+        volumes:
+            - '../../:/var/www/${CONTAINER_NAME}'
+            - '../fpm.conf:/usr/local/etc/php-fpm.d/zz-docker.conf'
+            - '../php.ini:/usr/local/etc/php/php.ini:ro'
+            - "/etc/timezone:/etc/timezone:ro"
+            - "/etc/localtime:/etc/localtime:ro"
+        networks:
+            - app-network
+
+    # Database
+    mariadb:
+        container_name: '${CONTAINER_NAME}-mariadb'
+        image: 'mariadb:latest'
+        restart: '${RESTART_POLICY}'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            TZ: "Europe/Rome"
+        networks:
+            - app-network
+
+networks:
+    app-network:
+        driver: bridge
