@@ -10,4 +10,7 @@ class GameConstants
     const TYPE_SHOP_BUY = 'SHOP_BUY';
     const TYPE_MODIFIER_USE = 'MODIFIER_USE';
     const TYPE_CARD_PLAY = 'CARD_PLAY';
+
+    // Placeholder per carte coperte (usato nelle proiezioni pubbliche)
+    const CARD_BACK = 'X';
 }

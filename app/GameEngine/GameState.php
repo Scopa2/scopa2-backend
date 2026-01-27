@@ -2,8 +2,10 @@
 
 namespace App\GameEngine;
 
+use App\GameEngine\GameConstants;
+
 /**
- * Rappresenta lo stato atomico della partita in un dato momento.
+ * Rappresenta lo stato atomico della partita in una dato momento.
  * In un sistema distribuito, questo è l'oggetto che viene sincronizzato tra i nodi.
  */
 class GameState
@@ -54,7 +56,8 @@ class GameState
             'currentTurnPlayer' => $this->currentTurnPlayer,
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
-            'deck_count' => count($this->deck), // Trasmettiamo solo QUANTE carte mancano
+            // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza
+            'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
             'players' => []
         ];
 
@@ -76,13 +79,14 @@ class GameState
                 // Vedo anche esattamente cosa ho preso (per decidere cosa sacrificare allo shop)
                 $playerView['captured'] = $data['captured'];
             } else {
-                // Se è l'avversario, vedo solo quante carte ha (o "BACK")
+                // Se è l'avversario, vedo solo quante carte ha, rappresentate come placeholder
                 $count = count($data['hand']);
-                $playerView['hand'] = array_fill(0, $count, 'BACK');
+                $playerView['hand'] = array_fill(0, $count, GameConstants::CARD_BACK);
 
-                // NOTA: In Scopa non vedi il contenuto delle carte prese dall'avversario,
-                // a meno di modificatori speciali.
-                $playerView['captured'] = [];
+                // Per le carte prese (captured) mostriamo lo stesso numero di placeholder
+                // così che i client possano trattarle come una collezione di slot modificabili.
+                $capturedCount = count($data['captured']);
+                $playerView['captured'] = array_fill(0, $capturedCount, GameConstants::CARD_BACK);
             }
 
             $publicState['players'][$pid] = $playerView;
