@@ -3,38 +3,72 @@
 namespace App\GameEngine;
 
 use Exception;
+use App\GameEngine\ScoreCalculator;
 
 class ScopaEngine
 {
     private GameState $state;
     private $rng; // Random Number Generator
+    private string $gameSeed; // Seed della partita
 
     public function __construct(string $seed)
     {
         $this->state = new GameState();
-        // Inizializza RNG deterministico
-        mt_srand(crc32($seed));
+        $this->gameSeed = $seed;
+
+        // Inizializza RNG deterministico per il primo round
+        $this->initializeRNG($seed);
 
         // Setup Iniziale (Mazzo, Tavolo, Shop)
         $this->initializeGame();
     }
 
+    /**
+     * Inizializza il RNG con un seed specifico
+     */
+    private function initializeRNG(string $seed): void
+    {
+        mt_srand(crc32($seed));
+    }
+
     private function initializeGame() {
-        // 1. Crea Mazzo (Logica semplificata per brevità)
-        foreach(GameConstants::SUITS as $s) {
-            foreach(GameConstants::VALUES as $v) $this->state->deck[] = $v.$s;
-        }
-        shuffle($this->state->deck); // Mescola usando il seed globale
+        // 1. Crea e mescola il mazzo
+        $this->createAndShuffleDeck();
 
         // 2. Metti 4 carte a terra
-        for($i=0; $i<4; $i++) $this->state->table[] = array_pop($this->state->deck);
+        $this->dealTableCards();
 
-        // 3. Dai 3 carte a testa (Esempio)
+        // 3. Dai 3 carte a testa
         $this->distributeCards();
 
-        // 4. Popola Shop
+        // 4. Popola Shop (solo al primo round)
         $this->state->shop = ['GEN', 'LUC', 'ANT']; // Esempio statico
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
+    }
+
+    /**
+     * Crea un nuovo mazzo di 40 carte e lo mescola
+     */
+    private function createAndShuffleDeck(): void
+    {
+        $this->state->deck = [];
+        foreach(GameConstants::SUITS as $s) {
+            foreach(GameConstants::VALUES as $v) {
+                $this->state->deck[] = $v.$s;
+            }
+        }
+        shuffle($this->state->deck); // Mescola usando il seed globale
+    }
+
+    /**
+     * Mette 4 carte sul tavolo dal mazzo
+     */
+    private function dealTableCards(): void
+    {
+        $this->state->table = [];
+        for($i=0; $i<4; $i++) {
+            $this->state->table[] = array_pop($this->state->deck);
+        }
     }
 
     private function distributeCards() : void
@@ -105,7 +139,9 @@ class ScopaEngine
             // Scarto
             $this->state->table[] = $card;
         } else {
-            // Presa
+            // Presa - Traccia l'ultimo giocatore che ha catturato
+            $this->state->lastCapturePlayer = $pid;
+
             // Rimuovi target dal tavolo
             $this->state->players[$pid]['captured'][] = $card;
             foreach($targets as $t) {
@@ -139,8 +175,86 @@ class ScopaEngine
 
     private function advanceRound()
     {
-        //TODO: Implementa logica di fine round
-        dd("ROUND FINITO");
+        // 0. Assegna le carte rimaste sul tavolo all'ultimo giocatore che ha fatto una presa
+        if (!empty($this->state->table) && $this->state->lastCapturePlayer !== null) {
+            foreach ($this->state->table as $card) {
+                $this->state->players[$this->state->lastCapturePlayer]['captured'][] = $card;
+            }
+            $this->state->table = []; // Svuota il tavolo
+        }
+
+        // 1. Calcola i punti del round appena concluso
+        $roundScores = $this->calculateRoundScore();
+
+        // 2. Aggiorna i punteggi totali
+        $this->state->scores['p1'] += $roundScores['p1'];
+        $this->state->scores['p2'] += $roundScores['p2'];
+
+        // 3. Verifica condizione di vittoria (21 punti)
+        if ($this->state->scores['p1'] >= 21 || $this->state->scores['p2'] >= 21) {
+            $this->endGame();
+            return;
+        }
+
+        // 4. Incrementa il contatore del round
+        $this->state->roundIndex++;
+
+        // 5. Resetta lo stato dei giocatori per il nuovo round
+        $this->resetPlayersForNewRound();
+
+        // 6. Inizializza il RNG con un seed deterministico basato sul seed della partita e il round
+        $roundSeed = $this->gameSeed . '_round_' . $this->state->roundIndex;
+        $this->initializeRNG($roundSeed);
+
+        // 7. Crea un nuovo mazzo mescolato
+        $this->createAndShuffleDeck();
+
+        // 8. Metti 4 carte a terra
+        $this->dealTableCards();
+
+        // 9. Distribuisci le carte ai giocatori
+        $this->distributeCards();
+
+        // 10. Il turno ricomincia dal giocatore P1 (o potrebbe essere alternato)
+        $this->state->currentTurnPlayer = 'p1';
+
+        // 11. Resetta il tracking dell'ultimo giocatore che ha catturato
+        $this->state->lastCapturePlayer = null;
+    }
+
+    /**
+     * Calcola i punti per il round appena concluso
+     * Ritorna un array con i punteggi: ['p1' => punti, 'p2' => punti]
+     */
+    private function calculateRoundScore(): array
+    {
+        return ScoreCalculator::calculateRoundScore($this->state->players);
+    }
+
+    /**
+     * Termina la partita quando un giocatore raggiunge 21 punti
+     *
+     * TODO: Implementare la logica di fine partita:
+     * - Segnare il vincitore
+     * - Aggiornare lo stato isGameOver
+     * - Eventualmente salvare statistiche finali
+     */
+    private function endGame(): void
+    {
+        $this->state->isGameOver = true;
+        // TODO: Logica aggiuntiva di fine partita
+    }
+
+    /**
+     * Resetta lo stato dei giocatori per preparare un nuovo round
+     */
+    private function resetPlayersForNewRound(): void
+    {
+        foreach ($this->state->players as $pid => &$playerData) {
+            $playerData['hand'] = [];
+            $playerData['captured'] = [];
+            $playerData['scope'] = 0;
+        }
     }
 
     /**

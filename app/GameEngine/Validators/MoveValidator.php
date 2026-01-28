@@ -6,8 +6,8 @@ use App\GameEngine\GameConstants;
 use App\GameEngine\GameState;
 use App\GameEngine\GameUtilities;
 use App\GameEngine\ScopaEngine;
-use App\GameEngine\Models\Card;
 use App\GameEngine\ScopaNotationParser;
+use App\Http\Requests\GameActionRequest;
 use App\Models\Game;
 use App\Models\GameEvent;
 use Illuminate\Support\Collection;
@@ -58,6 +58,7 @@ class MoveValidator
                 break; // NON cambia turno
 
             case GameConstants::TYPE_CARD_PLAY:
+                //set parsed values in the request
                 return $this->validatePlayCard($action['card'], $action['targets']);
         }
 

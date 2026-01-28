@@ -23,6 +23,15 @@ class GameState
     // Metadati per la gestione dei round (Opzionali per PGN)
     public int $roundIndex = 1;
 
+    // Punteggi totali dei giocatori
+    public array $scores = [
+        'p1' => 0,
+        'p2' => 0
+    ];
+
+    // Ultimo giocatore che ha fatto una presa (per assegnare le carte rimaste)
+    public ?string $lastCapturePlayer = null;
+
     public function __construct()
     {
         // Inizializzazione struttura dati giocatori
@@ -70,6 +79,7 @@ class GameState
                 'scope' => $data['scope'],
                 'santi' => $data['santi'], // I santi posseduti sono solitamente visibili
                 'captured_count' => count($data['captured']),
+                'totalScore' => $this->scores[$pid], // Punteggio totale del giocatore
             ];
 
             // Gestione Mano
