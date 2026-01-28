@@ -30,14 +30,19 @@ class ScopaEngine
         for($i=0; $i<4; $i++) $this->state->table[] = array_pop($this->state->deck);
 
         // 3. Dai 3 carte a testa (Esempio)
-        for($i=0; $i<3; $i++) {
-            $this->state->players['p1']['hand'][] = array_pop($this->state->deck);
-            $this->state->players['p2']['hand'][] = array_pop($this->state->deck);
-        }
+        $this->distributeCards();
 
         // 4. Popola Shop
         $this->state->shop = ['GEN', 'LUC', 'ANT']; // Esempio statico
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
+    }
+
+    private function distributeCards() : void
+    {
+        for($i=0; $i<3; $i++) {
+            $this->state->players['p1']['hand'][] = array_pop($this->state->deck);
+            $this->state->players['p2']['hand'][] = array_pop($this->state->deck);
+        }
     }
 
     // --- REPLAY SYSTEM ---
@@ -108,6 +113,11 @@ class ScopaEngine
                 if($tIdx !== false) array_splice($this->state->table, $tIdx, 1);
                 $this->state->players[$pid]['captured'][] = $t;
             }
+
+            // Controlla se è scopa
+            if (empty($this->state->table)) {
+                $this->state->players[$pid]['scope'] += 1;
+            }
         }
     }
 
@@ -116,7 +126,21 @@ class ScopaEngine
         $this->state->currentTurnPlayer =
             ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
 
-        // TODO: Logica ridistribuzione carte se mani vuote
+        // Redistriuzione carte se entrambe le mani sono vuote
+        if (empty($this->state->players['p1']['hand']) && empty($this->state->players['p2']['hand'])) {
+            // Se il mazzo è vuoto, termina il round
+            if (empty($this->state->deck)) {
+                $this->advanceRound();
+                return;
+            }
+            $this->distributeCards();
+        }
+    }
+
+    private function advanceRound()
+    {
+        //TODO: Implementa logica di fine round
+        dd("ROUND FINITO");
     }
 
     /**

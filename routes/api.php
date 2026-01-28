@@ -12,3 +12,10 @@ Route::get('/games/{gameId}', [GameController::class, 'show']);
 
 // Gestisce le azioni (compra, usa, gioca carta)
 Route::post('/games/{gameId}/action', [GameController::class, 'handleAction']);
+
+Route::fallback(function () {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'API route not found',
+    ], 404);
+});

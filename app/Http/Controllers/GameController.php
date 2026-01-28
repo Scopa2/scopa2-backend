@@ -40,7 +40,10 @@ class GameController extends Controller
     public function show($gameId, Request $request)
     {
         $game = Game::findOrFail($gameId);
-        $userId = $request->user()?->id ?? 'p1';
+
+        //get the query parameter "player"
+        $userId = $request->query('player', 'p1');
+        //$userId = $request->user()?->id ?? 'p1';
 
         $events = GameEvent::where('game_id', $gameId)->orderBy('sequence_number')->get();
 
@@ -59,7 +62,9 @@ class GameController extends Controller
     public function handleAction(GameActionRequest $request, $gameId)
     {
         $validated = $request->validated();
-        $userId = $request->user()?->id ?? 'p1';
+
+        $userId = $request->query('player', 'p1');
+        //$userId = $request->user()?->id ?? 'p1';
 
         try {
             return DB::transaction(function () use ($gameId, $userId, $validated) {

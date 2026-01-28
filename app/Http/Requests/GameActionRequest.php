@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidGameMove;
 use Illuminate\Foundation\Http\FormRequest;
 
 class GameActionRequest extends FormRequest
@@ -14,6 +15,9 @@ class GameActionRequest extends FormRequest
 
     public function rules(): array
     {
+        $gameId = $this->route('gameId');
+        $playerId = $this->query('player', 'p1');
+
         return [
             // L'azione deve essere una stringa PGN valida (Regex di base)
             'action' => [
@@ -21,7 +25,9 @@ class GameActionRequest extends FormRequest
                 'string',
                 'min:2',
                 // Regex che valida i 3 formati: $Compra, @Usa o GiocataCarta
-                'regex:/^(\$[A-Z0-9]+\(.*\)|@[A-Z0-9]+(\[.*\])?|[1-9][0-1]?[DCSB](x\(?.*\)?#?)?)$/'
+                'regex:/^(\$[A-Z0-9]+\(.*\)|@[A-Z0-9]+(\[.*\])?|[1-9][0-1]?[DCSB](x\(?.*\)?#?)?)$/',
+                // Game state validation
+                new ValidGameMove($gameId, $playerId),
             ],
         ];
     }
@@ -31,6 +37,8 @@ class GameActionRequest extends FormRequest
         return [
             'action.regex' => 'Il formato della mossa PGN non è valido.',
             'action.required' => 'Devi inviare un\'azione.',
+            'action.string' => 'L\'azione deve essere una stringa.',
+            'action.min' => 'L\'azione deve essere lunga almeno :min caratteri.',
         ];
     }
 }
