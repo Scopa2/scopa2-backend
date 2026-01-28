@@ -279,4 +279,40 @@ class ScopaEngine
             count($this->state->deck)
         );
     }
+
+    public function getBestBotAction(): string
+    {
+        $botId = 'p2';
+        $botHand = $this->state->players[$botId]['hand'];
+        $tableCards = $this->state->table;
+
+        // 1. Cerca una presa
+        foreach ($botHand as $cardInHand) {
+            $valueInHand = GameConstants::getCardValue($cardInHand);
+            
+            // Cerca una carta singola da prendere
+            foreach ($tableCards as $cardOnTable) {
+                if ($valueInHand === GameConstants::getCardValue($cardOnTable)) {
+                    return $cardInHand . 'x' . $cardOnTable;
+                }
+            }
+
+            // Cerca una combinazione di carte da prendere (somma)
+            // Questo è un esempio semplificato, per N carte la complessità aumenta.
+            // Qui consideriamo solo 2 carte.
+            if (count($tableCards) >= 2) {
+                for ($i = 0; $i < count($tableCards); $i++) {
+                    for ($j = $i + 1; $j < count($tableCards); $j++) {
+                        if ($valueInHand === (GameConstants::getCardValue($tableCards[$i]) + GameConstants::getCardValue($tableCards[$j]))) {
+                            return $cardInHand . 'x' . $tableCards[$i] . '+' . $tableCards[$j];
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Se non ci sono prese, scarta una carta a caso
+        $randomCard = $botHand[array_rand($botHand)];
+        return $randomCard;
+    }
 }

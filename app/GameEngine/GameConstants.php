@@ -13,4 +13,11 @@ class GameConstants
 
     // Placeholder per carte coperte (usato nelle proiezioni pubbliche)
     const CARD_BACK = 'X';
+
+    public static function getCardValue(string $card): int
+    {
+        if (strlen($card) < 2) return 0;
+        $valuePart = substr($card, 0, -1);
+        return (int)$valuePart;
+    }
 }

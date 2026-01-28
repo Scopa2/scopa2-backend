@@ -24,10 +24,15 @@ class GameStateUpdated implements ShouldBroadcast
         $this->stateP2 = $fullState->toPublicView('p2');
     }
 
+    public function broadcastAs(): string
+    {
+        return 'GameStateUpdated';
+    }
+
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('game.' . $this->gameId),
+            new Channel('game.' . $this->gameId),
         ];
     }
 }

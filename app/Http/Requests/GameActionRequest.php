@@ -16,7 +16,7 @@ class GameActionRequest extends FormRequest
     public function rules(): array
     {
         $gameId = $this->route('gameId');
-        $playerId = $this->query('player', 'p1');
+        $playerId = $this->query('player');
 
         return [
             // L'azione deve essere una stringa PGN valida (Regex di base)
