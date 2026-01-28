@@ -10,9 +10,9 @@ return new class extends Migration {
         Schema::create('games', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('player_1_id')->nullable();
-            $table->string('player_2_id')->nullable(); // 'bot' se PVE
-            $table->string('seed'); // Per rigenerare mazzo e shop
-            $table->string('status')->default('waiting'); // waiting, playing, finished
+            $table->string('player_2_id')->nullable();
+            $table->string('seed');
+            $table->string('status')->default('waiting');
             $table->timestamps();
         });
 

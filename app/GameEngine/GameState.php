@@ -65,13 +65,14 @@ class GameState
             'currentTurnPlayer' => $this->currentTurnPlayer,
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
+            'lastCapturePlayer' => $this->lastCapturePlayer,
             // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza
             'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
             'players' => []
         ];
 
         foreach ($this->players as $pid => $data) {
-            $isOwner = ($pid === $viewerId);
+            $isOwner = true;// ($pid === $viewerId); //DEBUG
 
             // Logica di mascheramento (Information Hiding)
             $playerView = [
@@ -95,8 +96,7 @@ class GameState
 
                 // Per le carte prese (captured) mostriamo lo stesso numero di placeholder
                 // così che i client possano trattarle come una collezione di slot modificabili.
-                $capturedCount = count($data['captured']);
-                $playerView['captured'] = array_fill(0, $capturedCount, GameConstants::CARD_BACK);
+                $playerView['captured'] = $data['captured'];
             }
 
             $publicState['players'][$pid] = $playerView;

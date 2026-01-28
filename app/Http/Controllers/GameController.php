@@ -14,18 +14,19 @@ use Illuminate\Support\Str;
 
 class GameController extends Controller
 {
+
     /**
      * CREAZIONE: Inizia una nuova sessione di gioco
      */
     public function create(Request $request)
     {
         $game = Game::create([
-            'id' => (string) Str::uuid(),
-            'player_1_id' => $request->user()?->id ?? 'p1',
-            'player_2_id' => $request->input('opponent_id', 'bot'),
-            'seed' => Str::random(16), // Il cuore del sistema deterministico
+            'id' => (string)Str::uuid(),
+            'player_1_id' => 'p1',
+            'player_2_id' => 'p2',
+            'seed' => Str::random(16),
             'status' => 'playing',
-            'has_bot' => $request->input('has_bot', false),
+            'has_bot' => true,
         ]);
 
         return response()->json([
@@ -43,8 +44,7 @@ class GameController extends Controller
         $game = Game::findOrFail($gameId);
 
         // get the query parameter "player"
-        $userId = $request->query('player', 'p1');
-        // $userId = $request->user()?->id ?? 'p1';
+        $userId = $request->query('player');
 
         $events = GameEvent::where('game_id', $gameId)->orderBy('sequence_number')->get();
 
@@ -60,17 +60,17 @@ class GameController extends Controller
     /**
      * Gestisce una singola micro-azione di gioco (Live)
      */
-    public function handleAction(GameActionRequest $request, $gameId, $userId = null)
+    public function handleAction(GameActionRequest $request, $gameId)
     {
         $validated = $request->validated();
-        $userId = $userId ?? $request->query('player', 'p1');
+        $userId = $request->query('player');
 
         try {
             return DB::transaction(function () use ($gameId, $userId, $validated) {
                 return $this->_handleAction($gameId, $userId, $validated['action']);
             });
         } catch (\Exception $e) {
-            Log::error('Errore gioco: '.$e->getMessage());
+            Log::error('Errore gioco: ' . $e->getMessage());
 
             return response()->json([
                 'status' => 'error',
@@ -107,14 +107,26 @@ class GameController extends Controller
         // 6. Generazione stato aggiornato per il Broadcast
         $updatedState = $engine->getState();
 
-        // Invio WebSocket
-        broadcast(new GameStateUpdated($gameId, $updatedState))->toOthers();
+        // 7. Se c'è un bot e tocca a lui, gioca
+        if ($game->has_bot && $updatedState->currentTurnPlayer === 'p2') {
+            // It's the bot's turn. Let it play.
+            $botAction = $engine->getBestBotAction();
+            $engine->applyAction('p2', $botAction);
 
-        if ($game->has_bot && $userId === 'p1') {
-            DB::afterCommit(function () use ($gameId) {
-                $this->_botPlay($gameId, 'bot');
-            });
+            // Persist the bot's action
+            GameEvent::create([
+                'game_id' => $gameId,
+                'sequence_number' => $events->count() + 2, // +1 for user, +1 for bot
+                'actor_id' => 'p2',
+                'pgn_action' => $botAction,
+            ]);
+
+            // Get the final state after bot's move
+            $updatedState = $engine->getState();
         }
+
+        // Invio WebSocket
+        broadcast(new GameStateUpdated($gameId, $updatedState));
 
         return response()->json([
             'status' => 'success',
@@ -123,49 +135,5 @@ class GameController extends Controller
         ]);
     }
 
-    public function botPlay($gameId, $botId = 'bot')
-    {
-        try {
-            DB::transaction(function () use ($gameId, $botId) {
-                $this->_botPlay($gameId, $botId);
-            });
-        } catch (\Exception $e) {
-            Log::error('Errore bot: '.$e->getMessage());
-        }
-    }
 
-    private function _botPlay($gameId, $botId = 'bot')
-    {
-        $game = Game::findOrFail($gameId);
-        if (! $game->has_bot) {
-            return;
-        }
-
-        $events = GameEvent::where('game_id', $gameId)->orderBy('sequence_number')->get();
-        $engine = new ScopaEngine($game->seed);
-        $state = $engine->replay($events->all());
-
-        if ($state->getCurrentPlayerId() !== $botId) {
-            return;
-        }
-
-        $botHand = $state->getHand($botId);
-        $tableCards = $state->getTable();
-
-        if (empty($botHand)) {
-            return;
-        }
-
-        // Logica del bot: gioca una carta a caso dalla mano
-        $cardToPlay = $botHand[array_rand($botHand)];
-        $actionPgn = "PLAY({$cardToPlay})";
-
-        // Se ci sono carte sul tavolo, prova a prendere una carta a caso
-        if (! empty($tableCards)) {
-            $cardToTake = $tableCards[array_rand($tableCards)];
-            $actionPgn = "TAKE({$cardToPlay}, [{$cardToTake}])";
-        }
-
-        $this->_handleAction($gameId, $botId, $actionPgn);
-    }
 }
