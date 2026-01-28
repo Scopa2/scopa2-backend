@@ -8,11 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class Game extends Model
 {
     use HasUuids;
+
     protected $fillable = [
         'id',
         'player_1_id',
         'player_2_id',
         'seed',
         'status',
+        'has_bot',
     ];
 }
