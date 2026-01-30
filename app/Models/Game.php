@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Game extends Model
 {
@@ -17,4 +18,9 @@ class Game extends Model
         'status',
         'has_bot',
     ];
+
+    public function events(): HasMany|Game
+    {
+        return $this->hasMany(GameEvent::class);
+    }
 }

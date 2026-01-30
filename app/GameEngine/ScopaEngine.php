@@ -116,6 +116,8 @@ class ScopaEngine
                 $this->advanceTurn();
                 break;
         }
+
+        $this->state->lastMovePgn = $pgnAction;
     }
 
     private function handleBuy($pid, $santoId, $paymentCards) {

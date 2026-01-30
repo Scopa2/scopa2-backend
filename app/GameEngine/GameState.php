@@ -32,6 +32,9 @@ class GameState
     // Ultimo giocatore che ha fatto una presa (per assegnare le carte rimaste)
     public ?string $lastCapturePlayer = null;
 
+    // Ultima mossa PGN (per animazioni client)
+    public ?string $lastMovePgn = null;
+
     public function __construct()
     {
         // Inizializzazione struttura dati giocatori
@@ -66,6 +69,7 @@ class GameState
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
             'lastCapturePlayer' => $this->lastCapturePlayer,
+            'lastMovePgn' => $this->lastMovePgn,
             // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza
             'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
             'players' => []
