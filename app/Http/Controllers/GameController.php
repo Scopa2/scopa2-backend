@@ -107,31 +107,33 @@ class GameController extends Controller
         // 6. Generazione stato aggiornato per il Broadcast
         $updatedState = $engine->getState();
 
-        // 7. Se c'è un bot e tocca a lui, gioca
-        if ($game->has_bot && $updatedState->currentTurnPlayer === 'p2') {
-            // It's the bot's turn. Let it play.
-            $botAction = $engine->getBestBotAction();
-            $engine->applyAction('p2', $botAction);
+//        // 7. Se c'è un bot e tocca a lui, gioca
+//        if ($game->has_bot && $updatedState->currentTurnPlayer === 'p2') {
+//            // It's the bot's turn. Let it play.
+//            $botAction = $engine->getBestBotAction();
+//            $engine->applyAction('p2', $botAction);
+//
+//            // Persist the bot's action
+//            GameEvent::create([
+//                'game_id' => $gameId,
+//                'sequence_number' => $events->count() + 2, // +1 for user, +1 for bot
+//                'actor_id' => 'p2',
+//                'pgn_action' => $botAction,
+//            ]);
+//
+//            // Get the final state after bot's move
+//            $updatedState = $engine->getState();
+//        }
 
-            // Persist the bot's action
-            GameEvent::create([
-                'game_id' => $gameId,
-                'sequence_number' => $events->count() + 2, // +1 for user, +1 for bot
-                'actor_id' => 'p2',
-                'pgn_action' => $botAction,
-            ]);
-
-            // Get the final state after bot's move
-            $updatedState = $engine->getState();
-        }
+        $gameStateView = $updatedState->toPublicView($userId);
 
         // Invio WebSocket
-        broadcast(new GameStateUpdated($gameId, $updatedState));
+        broadcast(new GameStateUpdated($gameStateView));
 
         return response()->json([
             'status' => 'success',
             'message' => 'Azione processata',
-            'state' => $updatedState->toPublicView($userId),
+            'state' => $gameStateView
         ]);
     }
 

@@ -160,6 +160,9 @@ class ScopaEngine
     }
 
     private function advanceTurn() {
+        // Increment turn index
+        $this->state->turnIndex++;
+
         // Toggle Player
         $this->state->currentTurnPlayer =
             ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';

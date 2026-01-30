@@ -20,8 +20,8 @@ class GameState
     public string $currentTurnPlayer = 'p1';
     public bool $isGameOver = false;
 
-    // Metadati per la gestione dei round (Opzionali per PGN)
     public int $roundIndex = 1;
+    public int $turnIndex = 1;
 
     // Punteggi totali dei giocatori
     public array $scores = [
@@ -68,6 +68,7 @@ class GameState
             'currentTurnPlayer' => $this->currentTurnPlayer,
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
+            'turnIndex' => $this->turnIndex,
             'lastCapturePlayer' => $this->lastCapturePlayer,
             'lastMovePgn' => $this->lastMovePgn,
             // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza

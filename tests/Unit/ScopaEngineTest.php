@@ -47,3 +47,21 @@ test('engine updates lastMovePgn after replay', function () {
     $engine->applyAction('p2', $action2);
     expect($engine->getState()->lastMovePgn)->toBe($action2);
 });
+
+test('engine increments turnIndex after each turn', function () {
+    $seed = 'test_seed_turns';
+    $engine = new ScopaEngine($seed);
+    $state = $engine->getState();
+    
+    expect($state->turnIndex)->toBe(1);
+    
+    $card1 = $state->players['p1']['hand'][0];
+    $engine->applyAction('p1', $card1);
+    
+    expect($engine->getState()->turnIndex)->toBe(2);
+    
+    $card2 = $state->players['p2']['hand'][0];
+    $engine->applyAction('p2', $card2);
+    
+    expect($engine->getState()->turnIndex)->toBe(3);
+});

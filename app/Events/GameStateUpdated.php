@@ -5,34 +5,33 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class GameStateUpdated implements ShouldBroadcast
+class GameStateUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $gameId;
-    public $stateP1; // Stato visto da P1
-    public $stateP2; // Stato visto da P2
+    public $state;
 
-    public function __construct($gameId, $fullState)
+    public function __construct($gameStateView)
     {
-        $this->gameId = $gameId;
-        // Pre-calcoliamo le viste mascherate
-        $this->stateP1 = $fullState->toPublicView('p1'); // Assumendo ID fissi p1/p2 per ora
-        $this->stateP2 = $fullState->toPublicView('p2');
+        $this->state = $gameStateView;
     }
 
     public function broadcastAs(): string
     {
-        return 'GameStateUpdated';
+        return 'game_sate_updated';
     }
 
     public function broadcastOn(): array
     {
         return [
-            new Channel('game.' . $this->gameId),
+            new Channel('games'),
         ];
+//        return [
+//            new Channel('game.' . $this->gameId),
+//        ];
     }
 }
