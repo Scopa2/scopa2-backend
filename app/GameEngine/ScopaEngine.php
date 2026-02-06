@@ -2,19 +2,23 @@
 
 namespace App\GameEngine;
 
+use App\Events\GameStateUpdated;
 use Exception;
 use App\GameEngine\ScoreCalculator;
 
 class ScopaEngine
 {
     private GameState $state;
-    private $rng; // Random Number Generator
     private string $gameSeed; // Seed della partita
+    private \Closure $onRoundEnded;
+    private bool $isReplaying = false;
 
-    public function __construct(string $seed)
+    public function __construct(string $seed, callable $onRoundEnded = null)
     {
         $this->state = new GameState();
         $this->gameSeed = $seed;
+        $this->onRoundEnded = $onRoundEnded ?? function () {
+        };
 
         // Inizializza RNG deterministico per il primo round
         $this->initializeRNG($seed);
@@ -31,7 +35,8 @@ class ScopaEngine
         mt_srand(crc32($seed));
     }
 
-    private function initializeGame() {
+    private function initializeGame()
+    {
         // 1. Crea e mescola il mazzo
         $this->createAndShuffleDeck();
 
@@ -52,9 +57,9 @@ class ScopaEngine
     private function createAndShuffleDeck(): void
     {
         $this->state->deck = [];
-        foreach(GameConstants::SUITS as $s) {
-            foreach(GameConstants::VALUES as $v) {
-                $this->state->deck[] = $v.$s;
+        foreach (GameConstants::SUITS as $s) {
+            foreach (GameConstants::VALUES as $v) {
+                $this->state->deck[] = $v . $s;
             }
         }
         shuffle($this->state->deck); // Mescola usando il seed globale
@@ -66,14 +71,14 @@ class ScopaEngine
     private function dealTableCards(): void
     {
         $this->state->table = [];
-        for($i=0; $i<4; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $this->state->table[] = array_pop($this->state->deck);
         }
     }
 
-    private function distributeCards() : void
+    private function distributeCards(): void
     {
-        for($i=0; $i<3; $i++) {
+        for ($i = 0; $i < 3; $i++) {
             $this->state->players['p1']['hand'][] = array_pop($this->state->deck);
             $this->state->players['p2']['hand'][] = array_pop($this->state->deck);
         }
@@ -82,10 +87,12 @@ class ScopaEngine
     // --- REPLAY SYSTEM ---
     public function replay(array $historyEvents): GameState
     {
+        $this->isReplaying = true;
         foreach ($historyEvents as $event) {
             // $event è il modello Eloquent GameEvent
             $this->applyAction($event->actor_id, $event->pgn_action);
         }
+        $this->isReplaying = false;
         return $this->state;
     }
 
@@ -120,7 +127,8 @@ class ScopaEngine
         $this->state->lastMovePgn = $pgnAction;
     }
 
-    private function handleBuy($pid, $santoId, $paymentCards) {
+    private function handleBuy($pid, $santoId, $paymentCards)
+    {
         // Rimuovi carte dal mazzo "captured" del player
         // Aggiungi santo alla mano santi
         // Rimuovi santo dallo shop -> Esempio veloce:
@@ -131,7 +139,8 @@ class ScopaEngine
         }
     }
 
-    private function handleCardPlay($pid, $card, $targets) {
+    private function handleCardPlay($pid, $card, $targets)
+    {
         // Togli carta dalla mano
         $hand = &$this->state->players[$pid]['hand'];
         $idx = array_search($card, $hand);
@@ -146,9 +155,9 @@ class ScopaEngine
 
             // Rimuovi target dal tavolo
             $this->state->players[$pid]['captured'][] = $card;
-            foreach($targets as $t) {
+            foreach ($targets as $t) {
                 $tIdx = array_search($t, $this->state->table);
-                if($tIdx !== false) array_splice($this->state->table, $tIdx, 1);
+                if ($tIdx !== false) array_splice($this->state->table, $tIdx, 1);
                 $this->state->players[$pid]['captured'][] = $t;
             }
 
@@ -159,7 +168,8 @@ class ScopaEngine
         }
     }
 
-    private function advanceTurn() {
+    private function advanceTurn()
+    {
         // Increment turn index
         $this->state->turnIndex++;
 
@@ -199,6 +209,11 @@ class ScopaEngine
         if ($this->state->scores['p1'] >= 21 || $this->state->scores['p2'] >= 21) {
             $this->endGame();
             return;
+        }
+
+        // Emetti evento di fine round (utile per il controller)
+        if (!$this->isReplaying) {
+            ($this->onRoundEnded)($this->getState()->toPublicView('p1'), $this->getState()->toPublicView('p2'));
         }
 
         // 4. Incrementa il contatore del round
@@ -294,7 +309,7 @@ class ScopaEngine
         // 1. Cerca una presa
         foreach ($botHand as $cardInHand) {
             $valueInHand = GameConstants::getCardValue($cardInHand);
-            
+
             // Cerca una carta singola da prendere
             foreach ($tableCards as $cardOnTable) {
                 if ($valueInHand === GameConstants::getCardValue($cardOnTable)) {

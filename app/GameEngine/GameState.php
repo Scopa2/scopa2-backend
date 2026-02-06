@@ -66,6 +66,7 @@ class GameState
             'table' => $this->table,
             'shop' => $this->shop,
             'currentTurnPlayer' => $this->currentTurnPlayer,
+            'isMyTurn' => ($this->currentTurnPlayer === $viewerId),
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
             'turnIndex' => $this->turnIndex,
@@ -77,14 +78,13 @@ class GameState
         ];
 
         foreach ($this->players as $pid => $data) {
-            $isOwner = true;// ($pid === $viewerId); //DEBUG
+            $isOwner = ($pid === $viewerId); //DEBUG
 
             // Logica di mascheramento (Information Hiding)
             $playerView = [
                 'blood' => $data['blood'],
                 'scope' => $data['scope'],
                 'santi' => $data['santi'], // I santi posseduti sono solitamente visibili
-                'captured_count' => count($data['captured']),
                 'totalScore' => $this->scores[$pid], // Punteggio totale del giocatore
             ];
 
@@ -102,10 +102,12 @@ class GameState
                 // Per le carte prese (captured) mostriamo lo stesso numero di placeholder
                 // così che i client possano trattarle come una collezione di slot modificabili.
                 $playerView['captured'] = $data['captured'];
+                //$playerView['captured'] = array_fill(0, count($data['captured']), GameConstants::CARD_BACK);
             }
 
             $publicState['players'][$pid] = $playerView;
         }
+
 
         return $publicState;
     }

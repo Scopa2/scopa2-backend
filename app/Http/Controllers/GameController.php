@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Events\GameStateUpdated;
+use App\Events\RoundFinished;
 use App\GameEngine\ScopaEngine;
+use App\Http\Requests\CreateGameRequest;
 use App\Http\Requests\GameActionRequest;
 use App\Models\Game;
 use App\Models\GameEvent;
+use GuzzleHttp\Promise\Create;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -22,11 +25,10 @@ class GameController extends Controller
     {
         $game = Game::create([
             'id' => (string)Str::uuid(),
-            'player_1_id' => 'p1',
-            'player_2_id' => 'p2',
+            'player_1_id' => $this->getLoggedPlayerSecret(),
+            'player_2_id' => null,
             'seed' => Str::random(16),
             'status' => 'playing',
-            'has_bot' => true,
         ]);
 
         return response()->json([
@@ -36,38 +38,55 @@ class GameController extends Controller
         ], 201);
     }
 
+    public function join(Request $request, $gameId)
+    {
+        $game = Game::findOrFail($gameId);
+        if ($game->player_2_id !== null) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Partita già al completo',
+            ], 422);
+        }
+
+        $game->player_2_id = $this->getLoggedPlayerSecret();
+        $game->save();
+
+        return response()->json([
+            'status' => 'joined',
+            'game_id' => $game->id,
+            'seed' => $game->seed,
+        ], 200);
+    }
+
     /**
      * SHOW: Recupera lo stato attuale (Replay PGN)
      */
     public function show($gameId, Request $request)
     {
         $game = Game::findOrFail($gameId);
-
-        // get the query parameter "player"
-        $userId = $request->query('player');
-
         $events = GameEvent::where('game_id', $gameId)->orderBy('sequence_number')->get();
 
         $engine = new ScopaEngine($game->seed);
         $state = $engine->replay($events->all());
 
         return response()->json([
-            'game_status' => $game->status,
-            'state' => $state->toPublicView($userId),
+            'gameStatus' => $game->status,
+            'state' => $state->toPublicView($this->getLoggedPlayerIndex($game))
         ]);
     }
 
     /**
      * Gestisce una singola micro-azione di gioco (Live)
      */
-    public function handleAction(GameActionRequest $request, $gameId)
+    public function handleAction(Request $request, $gameId)
     {
-        $validated = $request->validated();
-        $userId = $request->query('player');
+        // TODO ADD VALIDATION FROM GAMEACTIONREQUEST
+        $requestData = $request->all();
+
 
         try {
-            return DB::transaction(function () use ($gameId, $userId, $validated) {
-                return $this->_handleAction($gameId, $userId, $validated['action']);
+            return DB::transaction(function () use ($gameId, $requestData) {
+                return $this->_handleAction($gameId, $requestData['action']);
             });
         } catch (\Exception $e) {
             Log::error('Errore gioco: ' . $e->getMessage());
@@ -79,7 +98,7 @@ class GameController extends Controller
         }
     }
 
-    private function _handleAction($gameId, $userId, $action)
+    private function _handleAction($gameId, $action)
     {
         // 1. Lock della riga del gioco per evitare race conditions sulla sequenza
         $game = Game::where('id', $gameId)->lockForUpdate()->firstOrFail();
@@ -90,50 +109,36 @@ class GameController extends Controller
             ->get();
 
         // 3. Ricostruzione stato tramite Engine
-        $engine = new ScopaEngine($game->seed);
+        $engine = new ScopaEngine($game->seed,
+
+            // On round ended callback
+            function ($ARGOMENTIQUAFATTIBENE) use ($game) {
+            // FAI BROADCAST DEL ROUND INDICANDO CHI HA PRESO LE CARTE COSI CHE IL CLIENT PUO FARE L'ANIMAZIONE DELL'ULTIMA PRESA
+              //  broadcast(new RoundFinished($p1State, $game->player_1_id));
+                sleep(5);
+            });
+
         $engine->replay($events->all());
 
         // 4. Validazione logica ed esecuzione
-        $engine->applyAction($userId, $action);
+        $engine->applyAction($this->getLoggedPlayerIndex($game), $action);
+
+        // Invio WebSocket del nuovo stato
+        broadcast(new GameStateUpdated($engine->getState()->toPublicView('p1'), $game->player_1_id));
+        broadcast(new GameStateUpdated($engine->getState()->toPublicView('p2'), $game->player_2_id));
 
         // 5. Persistenza dell'evento
         GameEvent::create([
             'game_id' => $gameId,
             'sequence_number' => $events->count() + 1,
-            'actor_id' => $userId,
+            'actor_id' => $this->getLoggedPlayerIndex($game),
             'pgn_action' => $action,
         ]);
 
-        // 6. Generazione stato aggiornato per il Broadcast
-        $updatedState = $engine->getState();
-
-//        // 7. Se c'è un bot e tocca a lui, gioca
-//        if ($game->has_bot && $updatedState->currentTurnPlayer === 'p2') {
-//            // It's the bot's turn. Let it play.
-//            $botAction = $engine->getBestBotAction();
-//            $engine->applyAction('p2', $botAction);
-//
-//            // Persist the bot's action
-//            GameEvent::create([
-//                'game_id' => $gameId,
-//                'sequence_number' => $events->count() + 2, // +1 for user, +1 for bot
-//                'actor_id' => 'p2',
-//                'pgn_action' => $botAction,
-//            ]);
-//
-//            // Get the final state after bot's move
-//            $updatedState = $engine->getState();
-//        }
-
-        $gameStateView = $updatedState->toPublicView($userId);
-
-        // Invio WebSocket
-        broadcast(new GameStateUpdated($gameStateView));
 
         return response()->json([
             'status' => 'success',
             'message' => 'Azione processata',
-            'state' => $gameStateView
         ]);
     }
 

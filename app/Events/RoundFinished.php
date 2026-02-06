@@ -10,31 +10,31 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class GameStateUpdated implements ShouldBroadcastNow
+class RoundFinished implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    private $viewerId;
     public $state;
+    private $p1Id;
+    private $p2Id;
 
-    public function __construct($state, string $viewerId)
+    public function __construct($state, string $p1Id, string $p2Id)
     {
-        $this->viewerId = $viewerId;
         $this->state = $state;
+        $this->p1Id = $p1Id;
+        $this->p2Id = $p2Id;
     }
 
     public function broadcastAs(): string
     {
-        return 'game_state_updated';
+        return 'round_finished';
     }
 
     public function broadcastOn(): array
     {
         return [
-            new Channel($this->viewerId.'_games'),
+            new Channel($this->p1Id.'_games'),
+            new Channel($this->p2Id.'_games'),
         ];
-//        return [
-//            new Channel('game.' . $this->gameId),
-//        ];
     }
 }
