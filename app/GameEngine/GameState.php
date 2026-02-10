@@ -20,8 +20,8 @@ class GameState
     public string $currentTurnPlayer = 'p1';
     public bool $isGameOver = false;
 
-    // Metadati per la gestione dei round (Opzionali per PGN)
     public int $roundIndex = 1;
+    public int $turnIndex = 1;
 
     // Punteggi totali dei giocatori
     public array $scores = [
@@ -31,6 +31,9 @@ class GameState
 
     // Ultimo giocatore che ha fatto una presa (per assegnare le carte rimaste)
     public ?string $lastCapturePlayer = null;
+
+    // Ultima mossa PGN (per animazioni client)
+    public ?string $lastMovePgn = null;
 
     public function __construct()
     {
@@ -63,23 +66,25 @@ class GameState
             'table' => $this->table,
             'shop' => $this->shop,
             'currentTurnPlayer' => $this->currentTurnPlayer,
+            'isMyTurn' => ($this->currentTurnPlayer === $viewerId),
             'isGameOver' => $this->isGameOver,
             'roundIndex' => $this->roundIndex,
+            'turnIndex' => $this->turnIndex,
             'lastCapturePlayer' => $this->lastCapturePlayer,
+            'lastMovePgn' => $this->lastMovePgn,
             // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza
             'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
             'players' => []
         ];
 
         foreach ($this->players as $pid => $data) {
-            $isOwner = true;// ($pid === $viewerId); //DEBUG
+            $isOwner = ($pid === $viewerId); //DEBUG
 
             // Logica di mascheramento (Information Hiding)
             $playerView = [
                 'blood' => $data['blood'],
                 'scope' => $data['scope'],
                 'santi' => $data['santi'], // I santi posseduti sono solitamente visibili
-                'captured_count' => count($data['captured']),
                 'totalScore' => $this->scores[$pid], // Punteggio totale del giocatore
             ];
 
@@ -97,10 +102,12 @@ class GameState
                 // Per le carte prese (captured) mostriamo lo stesso numero di placeholder
                 // così che i client possano trattarle come una collezione di slot modificabili.
                 $playerView['captured'] = $data['captured'];
+                //$playerView['captured'] = array_fill(0, count($data['captured']), GameConstants::CARD_BACK);
             }
 
             $publicState['players'][$pid] = $playerView;
         }
+
 
         return $publicState;
     }
