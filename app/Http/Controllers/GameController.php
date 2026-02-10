@@ -86,18 +86,18 @@ class GameController extends Controller
         $requestData = $request->all();
 
 
-        try {
+        //try {
             return DB::transaction(function () use ($gameId, $requestData) {
                 return $this->_handleAction($gameId, $requestData['action']);
             });
-        } catch (\Exception $e) {
+        /*} catch (\Exception $e) {
             Log::error('Errore gioco: ' . $e->getMessage());
 
             return response()->json([
                 'status' => 'error',
                 'message' => $e->getMessage(),
             ], 422);
-        }
+        }*/
     }
 
     private function _handleAction($gameId, $action)

@@ -53,7 +53,7 @@ class ScopaEngine
         $this->distributeCards();
 
         // 4. Popola Shop (solo al primo round)
-        $this->state->shop = [SanBiagio::serializeForShop(), SanBiagio::serializeForShop()]; // Esempio statico
+        $this->state->shop = [SanBiagio::serializeForShop(), SanBiagio::serializeForShop(), SanBiagio::serializeForShop()]; // Esempio statico
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
     }
 
