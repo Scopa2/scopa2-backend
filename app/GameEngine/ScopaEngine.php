@@ -11,13 +11,18 @@ class ScopaEngine
     private GameState $state;
     private string $gameSeed; // Seed della partita
     private \Closure $onRoundEnded;
+    private \Closure $onGameEnded;
     private bool $isReplaying = false;
 
-    public function __construct(string $seed, callable $onRoundEnded = null)
+    public const GAME_WIN_SCORE = 5;
+
+    public function __construct(string $seed, callable $onRoundEnded = null, callable $onGameEnded = null)
     {
         $this->state = new GameState();
         $this->gameSeed = $seed;
         $this->onRoundEnded = $onRoundEnded ?? function () {
+        };
+        $this->onGameEnded = $onGameEnded ?? function () {
         };
 
         // Inizializza RNG deterministico per il primo round
@@ -205,9 +210,15 @@ class ScopaEngine
         $this->state->scores['p1'] += $roundScores['p1']['total'];
         $this->state->scores['p2'] += $roundScores['p2']['total'];
 
-        // 3. Verifica condizione di vittoria (21 punti)
-        if ($this->state->scores['p1'] >= 21 || $this->state->scores['p2'] >= 21) {
-            $this->endGame();
+        // 3. Verifica condizione di vittoria
+        if ($this->state->scores['p1'] >= self::GAME_WIN_SCORE || $this->state->scores['p2'] >= self::GAME_WIN_SCORE) {
+            $this->state->isGameOver = true;
+            ($this->onGameEnded)([
+                'lastCapturePlayer' => $this->getState()->lastCapturePlayer,
+                'roundScores' => $roundScores,
+                'gameScores' => $this->getState()->scores,
+                'winner' => $this->getState()->scores['p1'] > $this->getState()->scores['p2'] ? 'p1' : 'p2'
+            ]);
             return;
         }
 
@@ -243,22 +254,6 @@ class ScopaEngine
 
         // 11. Resetta il tracking dell'ultimo giocatore che ha catturato
         $this->state->lastCapturePlayer = null;
-    }
-
-
-
-    /**
-     * Termina la partita quando un giocatore raggiunge 21 punti
-     *
-     * TODO: Implementare la logica di fine partita:
-     * - Segnare il vincitore
-     * - Aggiornare lo stato isGameOver
-     * - Eventualmente salvare statistiche finali
-     */
-    private function endGame(): void
-    {
-        $this->state->isGameOver = true;
-        // TODO: Logica aggiuntiva di fine partita
     }
 
     /**
