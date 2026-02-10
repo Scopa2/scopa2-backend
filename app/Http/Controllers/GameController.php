@@ -127,6 +127,7 @@ class GameController extends Controller
 
         $engine->replay($events->all());
 
+
         // 4. Validazione logica ed esecuzione
         $engine->applyAction($this->getLoggedPlayerIndex($game), $action);
 

@@ -3,6 +3,8 @@
 namespace App\GameEngine;
 
 use App\Events\GameStateUpdated;
+use App\GameEngine\Santi\SanBiagio;
+use App\GameEngine\Santi\Santo;
 use App\GameEngine\ScoreCalculator;
 use Exception;
 
@@ -51,7 +53,7 @@ class ScopaEngine
         $this->distributeCards();
 
         // 4. Popola Shop (solo al primo round)
-        $this->state->shop = ['GEN', 'LUC', 'ANT']; // Esempio statico
+        $this->state->shop = [SanBiagio::serializeForShop(), SanBiagio::serializeForShop()]; // Esempio statico
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
     }
 
@@ -83,8 +85,8 @@ class ScopaEngine
     private function distributeCards(): void
     {
         for ($i = 0; $i < 3; $i++) {
-            $this->state->players['p1']['hand'][] = array_pop($this->state->deck);
-            $this->state->players['p2']['hand'][] = array_pop($this->state->deck);
+            $this->state->players->p1->addToHand(array_pop($this->state->deck));
+            $this->state->players->p2->addToHand(array_pop($this->state->deck));
         }
     }
 
@@ -117,8 +119,8 @@ class ScopaEngine
                 $this->handleBuy($actorId, $action['santo_id'], $action['payment']);
                 break; // NON cambia turno
 
-            case GameConstants::TYPE_MODIFIER_USE:
-                $this->handleModifier($actorId, $action['santo_id'], $action['params']);
+            case GameConstants::TYPE_SANTO_USE:
+                $this->handleSanto($actorId, $action['santo_id'], $action['params']);
                 break; // NON cambia turno
 
             case GameConstants::TYPE_CARD_PLAY:
@@ -131,24 +133,24 @@ class ScopaEngine
         $this->state->lastMovePgn = $pgnAction;
     }
 
+    private function handleSanto($pid, $santoId, $params)
+    {
+        /** @var Santo $santo */
+        $santo = GameConstants::SANTI[$santoId];
+        $santo::apply($pid, $this->state, $params);
+    }
+
     private function handleBuy($pid, $santoId, $paymentCards)
     {
-        // Rimuovi carte dal mazzo "captured" del player
-        // Aggiungi santo alla mano santi
-        // Rimuovi santo dallo shop -> Esempio veloce:
-        $key = array_search($santoId, $this->state->shop);
-        if ($key !== false) {
-            unset($this->state->shop[$key]);
-            $this->state->shop = array_values($this->state->shop); // Reindex
-        }
+        //TODO: validate buy
+        $this->state->players->get($pid)->santi[] = GameConstants::SANTI[$santoId]::serializeForShop();
     }
 
     private function handleCardPlay($pid, $card, $targets)
     {
         // Togli carta dalla mano
-        $hand = &$this->state->players[$pid]['hand'];
-        $idx = array_search($card, $hand);
-        if ($idx !== false) array_splice($hand, $idx, 1);
+        $player = $this->state->players->get($pid);
+        $player->removeFromHand($card);
 
         if (empty($targets)) {
             // Scarto
@@ -158,16 +160,18 @@ class ScopaEngine
             $this->state->lastCapturePlayer = $pid;
 
             // Rimuovi target dal tavolo
-            $this->state->players[$pid]['captured'][] = $card;
+            $player->addToCaptured($card);
             foreach ($targets as $t) {
                 $tIdx = array_search($t, $this->state->table);
-                if ($tIdx !== false) array_splice($this->state->table, $tIdx, 1);
-                $this->state->players[$pid]['captured'][] = $t;
+                if ($tIdx !== false) {
+                    array_splice($this->state->table, $tIdx, 1);
+                }
+                $player->addToCaptured($t);
             }
 
             // Controlla se è scopa
             if (empty($this->state->table)) {
-                $this->state->players[$pid]['scope'] += 1;
+                $player->incrementScope();
             }
         }
     }
@@ -178,7 +182,7 @@ class ScopaEngine
         $this->state->turnIndex++;
 
         // Redistriuzione carte se entrambe le mani sono vuote
-        if (empty($this->state->players['p1']['hand']) && empty($this->state->players['p2']['hand'])) {
+        if (empty($this->state->players->p1->hand) && empty($this->state->players->p2->hand)) {
             // Se il mazzo è vuoto, termina il round
             if (empty($this->state->deck)) {
                 $this->advanceRound();
@@ -196,27 +200,28 @@ class ScopaEngine
     {
         // 0. Assegna le carte rimaste sul tavolo all'ultimo giocatore che ha fatto una presa
         if (!empty($this->state->table) && $this->state->lastCapturePlayer !== null) {
+            $lastPlayer = $this->state->players->get($this->state->lastCapturePlayer);
             foreach ($this->state->table as $card) {
-                $this->state->players[$this->state->lastCapturePlayer]['captured'][] = $card;
+                $lastPlayer->addToCaptured($card);
             }
             $this->state->table = []; // Svuota il tavolo
         }
 
         // 1. Calcola i punti del round appena concluso
-        $roundScores = ScoreCalculator::calculateRoundScore($this->state->players);
+        $roundScores = ScoreCalculator::calculateRoundScore($this->state->players->toArray());
 
         // 2. Aggiorna i punteggi totali
-        $this->state->scores['p1'] += $roundScores['p1']['total'];
-        $this->state->scores['p2'] += $roundScores['p2']['total'];
+        $this->state->scores->addScore('p1', $roundScores['p1']['total']);
+        $this->state->scores->addScore('p2', $roundScores['p2']['total']);
 
         // 3. Verifica condizione di vittoria
-        if ($this->state->scores['p1'] >= GameConstants::GAME_WIN_SCORE || $this->state->scores['p2'] >= GameConstants::GAME_WIN_SCORE) {
+        if ($this->state->scores->hasWinner(GameConstants::GAME_WIN_SCORE)) {
             $this->state->isGameOver = true;
             ($this->onGameEnded)([
                 'lastCapturePlayer' => $this->getState()->lastCapturePlayer,
                 'roundScores' => $roundScores,
-                'gameScores' => $this->getState()->scores,
-                'winner' => $this->getState()->scores['p1'] > $this->getState()->scores['p2'] ? 'p1' : 'p2'
+                'gameScores' => $this->getState()->scores->toArray(),
+                'winner' => $this->getState()->scores->getWinner()
             ]);
             return;
         }
@@ -233,7 +238,7 @@ class ScopaEngine
         $this->state->roundIndex++;
 
         // 5. Resetta lo stato dei giocatori per il nuovo round
-        $this->resetPlayersForNewRound();
+        $this->state->players->resetForNewRound();
 
         // 6. Inizializza il RNG con un seed deterministico basato sul seed della partita e il round
         $roundSeed = $this->gameSeed . '_round_' . $this->state->roundIndex;
@@ -255,17 +260,6 @@ class ScopaEngine
         $this->state->lastCapturePlayer = null;
     }
 
-    /**
-     * Resetta lo stato dei giocatori per preparare un nuovo round
-     */
-    private function resetPlayersForNewRound(): void
-    {
-        foreach ($this->state->players as $pid => &$playerData) {
-            $playerData['hand'] = [];
-            $playerData['captured'] = [];
-            $playerData['scope'] = 0;
-        }
-    }
 
     /**
      * Ritorna lo stato attuale del gioco.
@@ -293,7 +287,7 @@ class ScopaEngine
     public function getBestBotAction(): string
     {
         $botId = 'p2';
-        $botHand = $this->state->players[$botId]['hand'];
+        $botHand = $this->state->players->p2->hand;
         $tableCards = $this->state->table;
 
         // 1. Cerca una presa
