@@ -3,8 +3,8 @@
 namespace App\GameEngine;
 
 use App\Events\GameStateUpdated;
-use Exception;
 use App\GameEngine\ScoreCalculator;
+use Exception;
 
 class ScopaEngine
 {
@@ -199,11 +199,11 @@ class ScopaEngine
         }
 
         // 1. Calcola i punti del round appena concluso
-        $roundScores = $this->calculateRoundScore();
+        $roundScores = ScoreCalculator::calculateRoundScore($this->state->players);
 
         // 2. Aggiorna i punteggi totali
-        $this->state->scores['p1'] += $roundScores['p1'];
-        $this->state->scores['p2'] += $roundScores['p2'];
+        $this->state->scores['p1'] += $roundScores['p1']['total'];
+        $this->state->scores['p2'] += $roundScores['p2']['total'];
 
         // 3. Verifica condizione di vittoria (21 punti)
         if ($this->state->scores['p1'] >= 21 || $this->state->scores['p2'] >= 21) {
@@ -213,7 +213,10 @@ class ScopaEngine
 
         // Emetti evento di fine round (utile per il controller)
         if (!$this->isReplaying) {
-            ($this->onRoundEnded)($this->getState()->toPublicView('p1'), $this->getState()->toPublicView('p2'));
+            ($this->onRoundEnded)([
+                'lastCapturePlayer' => $this->state->lastCapturePlayer,
+                'roundScores' => $roundScores,
+            ]);
         }
 
         // 4. Incrementa il contatore del round
@@ -242,14 +245,7 @@ class ScopaEngine
         $this->state->lastCapturePlayer = null;
     }
 
-    /**
-     * Calcola i punti per il round appena concluso
-     * Ritorna un array con i punteggi: ['p1' => punti, 'p2' => punti]
-     */
-    private function calculateRoundScore(): array
-    {
-        return ScoreCalculator::calculateRoundScore($this->state->players);
-    }
+
 
     /**
      * Termina la partita quando un giocatore raggiunge 21 punti

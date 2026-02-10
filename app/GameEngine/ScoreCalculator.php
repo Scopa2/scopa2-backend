@@ -25,39 +25,66 @@ class ScoreCalculator
      * Calcola i punti per entrambi i giocatori alla fine di un round
      *
      * @param array $players Stato dei giocatori con le carte catturate
-     * @return array ['p1' => punti, 'p2' => punti]
+     * @return array Punteggi dettagliati per entrambi i giocatori
      */
     public static function calculateRoundScore(array $players): array
     {
+        $template = [
+            'settebello' => false,
+            'primiera' => false,
+            'scopaCount' => 0,
+            'allungo' => false,
+            'cardsCaptured' => 0,
+            'denari' => false,
+            'denariCount' => 0,
+            'total' => 0
+        ];
+
         $scores = [
-            'p1' => 0,
-            'p2' => 0
+            'p1' => $template,
+            'p2' => $template
         ];
 
         // 1. Punti per le Scope
-        $scores['p1'] += $players['p1']['scope'];
-        $scores['p2'] += $players['p2']['scope'];
+        foreach ($players as $playerKey => $player) {
+            $scopaCount = $player['scopaCount'] ?? 0;
+            if ($scopaCount > 0) {
+                $scores[$playerKey]['total'] += $scopaCount;
+                $scores[$playerKey]['scopaCount'] = $scopaCount;
+            }
+        }
 
         // 2. Punti per i 7 di Denari (Settebello)
-        $scores['p1'] += self::countSettebello($players['p1']['captured']);
-        $scores['p2'] += self::countSettebello($players['p2']['captured']);
+        foreach ($players as $playerKey => $player) {
+            $settebelloCount = self::countSettebello($player['captured']);
+            if ($settebelloCount > 0) {
+                $scores[$playerKey]['total'] += $settebelloCount;
+                $scores[$playerKey]['settebello'] = true;
+                $scores[$playerKey]['settebelloCount'] = $settebelloCount;
+            }
+        }
 
         // 3. Punto per chi ha più carte (Allungo)
         $allungoWinner = self::calculateAllungo($players);
         if ($allungoWinner !== null) {
-            $scores[$allungoWinner] += 1;
+            $scores[$allungoWinner]['total'] += 1;
+            $scores[$allungoWinner]['allungo'] = true;
+            $scores[$allungoWinner]['cardsCaptured'] = count($players[$allungoWinner]['captured']);
         }
 
         // 4. Punto per chi ha più Denari
         $denariWinner = self::calculateDenari($players);
         if ($denariWinner !== null) {
-            $scores[$denariWinner] += 1;
+            $scores[$denariWinner]['total'] += 1;
+            $scores[$denariWinner]['denari'] = true;
+            $scores[$denariWinner]['denariCount'] = self::countDenari($players[$denariWinner]['captured']);
         }
 
         // 5. Punto per la Primiera
         $primieraWinner = self::calculatePrimiera($players);
         if ($primieraWinner !== null) {
-            $scores[$primieraWinner] += 1;
+            $scores[$primieraWinner]['total'] += 1;
+            $scores[$primieraWinner]['primiera'] = true;
         }
 
         return $scores;

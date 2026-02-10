@@ -112,9 +112,8 @@ class GameController extends Controller
         $engine = new ScopaEngine($game->seed,
 
             // On round ended callback
-            function ($ARGOMENTIQUAFATTIBENE) use ($game) {
-            // FAI BROADCAST DEL ROUND INDICANDO CHI HA PRESO LE CARTE COSI CHE IL CLIENT PUO FARE L'ANIMAZIONE DELL'ULTIMA PRESA
-              //  broadcast(new RoundFinished($p1State, $game->player_1_id));
+            function ($results) use ($game) {
+                broadcast(new RoundFinished($results, $game->player_1_id, $game->player_2_id));
                 sleep(5);
             });
 

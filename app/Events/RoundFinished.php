@@ -14,13 +14,13 @@ class RoundFinished implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $state;
+    public $results;
     private $p1Id;
     private $p2Id;
 
-    public function __construct($state, string $p1Id, string $p2Id)
+    public function __construct($results, string $p1Id, string $p2Id)
     {
-        $this->state = $state;
+        $this->results = $results;
         $this->p1Id = $p1Id;
         $this->p2Id = $p2Id;
     }
