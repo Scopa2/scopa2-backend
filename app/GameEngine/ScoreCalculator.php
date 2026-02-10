@@ -47,7 +47,7 @@ class ScoreCalculator
 
         // 1. Punti per le Scope
         foreach ($players as $playerKey => $player) {
-            $scopaCount = $player['scopaCount'] ?? 0;
+            $scopaCount = $player['scope'] ?? 0;
             if ($scopaCount > 0) {
                 $scores[$playerKey]['total'] += $scopaCount;
                 $scores[$playerKey]['scopaCount'] = $scopaCount;

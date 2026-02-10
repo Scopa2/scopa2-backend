@@ -14,7 +14,6 @@ class ScopaEngine
     private \Closure $onGameEnded;
     private bool $isReplaying = false;
 
-    public const GAME_WIN_SCORE = 5;
 
     public function __construct(string $seed, callable $onRoundEnded = null, callable $onGameEnded = null)
     {
@@ -178,10 +177,6 @@ class ScopaEngine
         // Increment turn index
         $this->state->turnIndex++;
 
-        // Toggle Player
-        $this->state->currentTurnPlayer =
-            ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
-
         // Redistriuzione carte se entrambe le mani sono vuote
         if (empty($this->state->players['p1']['hand']) && empty($this->state->players['p2']['hand'])) {
             // Se il mazzo è vuoto, termina il round
@@ -191,6 +186,10 @@ class ScopaEngine
             }
             $this->distributeCards();
         }
+
+        // Toggle Player
+        $this->state->currentTurnPlayer =
+            ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
     }
 
     private function advanceRound()
@@ -211,7 +210,7 @@ class ScopaEngine
         $this->state->scores['p2'] += $roundScores['p2']['total'];
 
         // 3. Verifica condizione di vittoria
-        if ($this->state->scores['p1'] >= self::GAME_WIN_SCORE || $this->state->scores['p2'] >= self::GAME_WIN_SCORE) {
+        if ($this->state->scores['p1'] >= GameConstants::GAME_WIN_SCORE || $this->state->scores['p2'] >= GameConstants::GAME_WIN_SCORE) {
             $this->state->isGameOver = true;
             ($this->onGameEnded)([
                 'lastCapturePlayer' => $this->getState()->lastCapturePlayer,
@@ -249,8 +248,8 @@ class ScopaEngine
         // 9. Distribuisci le carte ai giocatori
         $this->distributeCards();
 
-        // 10. Il turno ricomincia dal giocatore P1 (o potrebbe essere alternato)
-        $this->state->currentTurnPlayer = 'p1';
+        // 10. Alterna il primo giocatore che inizia (per equità)
+        //$this->state->currentTurnPlayer = $this->state->currentTurnPlayer ?
 
         // 11. Resetta il tracking dell'ultimo giocatore che ha catturato
         $this->state->lastCapturePlayer = null;
