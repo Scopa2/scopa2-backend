@@ -11,13 +11,17 @@ class ScopaEngine
     private GameState $state;
     private string $gameSeed; // Seed della partita
     private \Closure $onRoundEnded;
+    private \Closure $onGameEnded;
     private bool $isReplaying = false;
 
-    public function __construct(string $seed, callable $onRoundEnded = null)
+
+    public function __construct(string $seed, callable $onRoundEnded = null, callable $onGameEnded = null)
     {
         $this->state = new GameState();
         $this->gameSeed = $seed;
         $this->onRoundEnded = $onRoundEnded ?? function () {
+        };
+        $this->onGameEnded = $onGameEnded ?? function () {
         };
 
         // Inizializza RNG deterministico per il primo round
@@ -173,10 +177,6 @@ class ScopaEngine
         // Increment turn index
         $this->state->turnIndex++;
 
-        // Toggle Player
-        $this->state->currentTurnPlayer =
-            ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
-
         // Redistriuzione carte se entrambe le mani sono vuote
         if (empty($this->state->players['p1']['hand']) && empty($this->state->players['p2']['hand'])) {
             // Se il mazzo è vuoto, termina il round
@@ -186,6 +186,10 @@ class ScopaEngine
             }
             $this->distributeCards();
         }
+
+        // Toggle Player
+        $this->state->currentTurnPlayer =
+            ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
     }
 
     private function advanceRound()
@@ -205,9 +209,15 @@ class ScopaEngine
         $this->state->scores['p1'] += $roundScores['p1']['total'];
         $this->state->scores['p2'] += $roundScores['p2']['total'];
 
-        // 3. Verifica condizione di vittoria (21 punti)
-        if ($this->state->scores['p1'] >= 21 || $this->state->scores['p2'] >= 21) {
-            $this->endGame();
+        // 3. Verifica condizione di vittoria
+        if ($this->state->scores['p1'] >= GameConstants::GAME_WIN_SCORE || $this->state->scores['p2'] >= GameConstants::GAME_WIN_SCORE) {
+            $this->state->isGameOver = true;
+            ($this->onGameEnded)([
+                'lastCapturePlayer' => $this->getState()->lastCapturePlayer,
+                'roundScores' => $roundScores,
+                'gameScores' => $this->getState()->scores,
+                'winner' => $this->getState()->scores['p1'] > $this->getState()->scores['p2'] ? 'p1' : 'p2'
+            ]);
             return;
         }
 
@@ -238,27 +248,11 @@ class ScopaEngine
         // 9. Distribuisci le carte ai giocatori
         $this->distributeCards();
 
-        // 10. Il turno ricomincia dal giocatore P1 (o potrebbe essere alternato)
-        $this->state->currentTurnPlayer = 'p1';
+        // 10. Alterna il primo giocatore che inizia (per equità)
+        //$this->state->currentTurnPlayer = $this->state->currentTurnPlayer ?
 
         // 11. Resetta il tracking dell'ultimo giocatore che ha catturato
         $this->state->lastCapturePlayer = null;
-    }
-
-
-
-    /**
-     * Termina la partita quando un giocatore raggiunge 21 punti
-     *
-     * TODO: Implementare la logica di fine partita:
-     * - Segnare il vincitore
-     * - Aggiornare lo stato isGameOver
-     * - Eventualmente salvare statistiche finali
-     */
-    private function endGame(): void
-    {
-        $this->state->isGameOver = true;
-        // TODO: Logica aggiuntiva di fine partita
     }
 
     /**

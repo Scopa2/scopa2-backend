@@ -4,9 +4,7 @@ namespace App\GameEngine;
 
 class GameConstants
 {
-    //const SUITS = ['D', 'C', 'S', 'B']; // Denari, Coppe, Spade, Bastoni
-    const SUITS = ['D']; // Denari
-
+    const SUITS = ['D', 'C', 'S', 'B']; // Denari, Coppe, Spade, Bastoni
     const VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // 8=Fante, 9=Cavallo, 10=Re
 
     const TYPE_SHOP_BUY = 'SHOP_BUY';
@@ -15,6 +13,8 @@ class GameConstants
 
     // Placeholder per carte coperte (usato nelle proiezioni pubbliche)
     const CARD_BACK = 'X';
+
+    const GAME_WIN_SCORE = 10;
 
     public static function getCardValue(string $card): int
     {

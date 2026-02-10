@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\GameStateEnum;
+use App\Events\GameFinished;
 use App\Events\GameStateUpdated;
 use App\Events\RoundFinished;
 use App\GameEngine\ScopaEngine;
@@ -28,7 +30,7 @@ class GameController extends Controller
             'player_1_id' => $this->getLoggedPlayerSecret(),
             'player_2_id' => null,
             'seed' => Str::random(16),
-            'status' => 'playing',
+            'status' => GameStateEnum::PLAYING,
         ]);
 
         return response()->json([
@@ -115,16 +117,29 @@ class GameController extends Controller
             function ($results) use ($game) {
                 broadcast(new RoundFinished($results, $game->player_1_id, $game->player_2_id));
                 sleep(5);
-            });
+            },
+
+            // On game ended callback
+            function ($results) use ($game) {
+                broadcast(new GameFinished($results, $game->player_1_id, $game->player_2_id));
+            }
+        );
 
         $engine->replay($events->all());
 
         // 4. Validazione logica ed esecuzione
         $engine->applyAction($this->getLoggedPlayerIndex($game), $action);
 
-        // Invio WebSocket del nuovo stato
-        broadcast(new GameStateUpdated($engine->getState()->toPublicView('p1'), $game->player_1_id));
-        broadcast(new GameStateUpdated($engine->getState()->toPublicView('p2'), $game->player_2_id));
+
+        // Se la partita è finita, aggiorna lo stato del gioco e non inviare aggiornamenti WebSocket
+        if ($engine->getState()->isGameOver) {
+            $game->status = GameStateEnum::FINISHED;
+            $game->save();
+        } else {
+            // Invio WebSocket del nuovo stato
+            broadcast(new GameStateUpdated($engine->getState()->toPublicView('p1'), $game->player_1_id));
+            broadcast(new GameStateUpdated($engine->getState()->toPublicView('p2'), $game->player_2_id));
+        }
 
         // 5. Persistenza dell'evento
         GameEvent::create([
