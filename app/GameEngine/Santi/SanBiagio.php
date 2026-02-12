@@ -14,9 +14,8 @@ class SanBiagio extends Santo
 
     public static function apply(string $pid, GameState $state, array $params = []): void
     {
-        $state->players->get($pid)->hand =array_map(function($card) {
-            $card[1] = 'D';
-            return $card;
-        },$state->players->get($pid)->hand);
+        foreach ($state->players->get($pid)->hand as $handCard) {
+           $state->mutateCardSuit($handCard, 'D');
+        }
     }
 }

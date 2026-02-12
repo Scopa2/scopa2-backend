@@ -20,6 +20,9 @@ class GameState
     /** @var array<array> Santi disponibili nello shop */
     public array $shop = [];
 
+    /** @var array<string, string> Carte diventate altre carte es. 4C => 4D per San Biagio */
+    public array $mutations = [];
+
     /** Stato dei giocatori */
     public Players $players;
 
@@ -63,8 +66,12 @@ class GameState
             'turnIndex' => $this->turnIndex,
             'lastCapturePlayer' => $this->lastCapturePlayer,
             'lastMovePgn' => $this->lastMovePgn,
+            // TODO: le mutazioni possono far visualizzare le carte dell'avversario,
+            // ad esempio con San Biagio, quindi vanno gestite con attenzione.
+            // Forse è meglio non esporle direttamente e applicarle solo alla vista del giocatore che le ha attivate?
+            'mutations' => $this->mutations,
             'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
-            'players' => []
+            'players' => [],
         ];
 
         foreach ($this->players->all() as $pid => $playerState) {
@@ -107,4 +114,94 @@ class GameState
     {
         return $this->players->get($pid)->hasCardCaptured($cardCode);
     }
+
+
+    /**
+     * Cambia il valore di una carta, ad esempio 3C => 1C, mantenendo il seme.
+     * @param string $cardCode
+     * @param string $newValue
+     * @return void
+     */
+    public function mutateCardValue(string $cardCode, string $newValue): void
+    {
+        $effectiveCardCode = $this->getEffectiveCard($cardCode);
+        $suit = substr($effectiveCardCode, -1);
+        $mutatedCard = $newValue . $suit;
+        $this->mutations[$cardCode] = $mutatedCard;
+    }
+
+    /**
+     * Cambia il seme di una carta, ad esempio 3C => 3D, mantenendo il valore.
+     * @param string $cardCode
+     * @param string $newSuit
+     * @return void
+     */
+    public function mutateCardSuit(string $cardCode, string $newSuit): void
+    {
+        $effectiveCardCode = $this->getEffectiveCard($cardCode);
+        $value = substr($effectiveCardCode, 0, -1);
+        $mutatedCard = $value . $newSuit;
+        $this->mutations[$cardCode] = $mutatedCard;
+    }
+
+    /**
+     * Cambia completamente una carta in un'altra, ad esempio 3C => 1D.
+     * @param string $cardCode
+     * @param string $newCardCode
+     * @return void
+     */
+    public function mutateCard(string $cardCode, string $newCardCode): void
+    {
+        $this->mutations[$cardCode] = $newCardCode;
+    }
+
+
+    /**
+     * Ritorna le carte catturate da un giocatore, applicando eventuali mutazioni.
+     * @param string $pid
+     * @return array
+     */
+    public function getEffectivePlayerCapturedCards(string $pid): array
+    {
+        $captured = $this->players->get($pid)->captured;
+        $effectiveCaptured = [];
+
+        foreach ($captured as $card) {
+            if (isset($this->mutations[$card])) {
+                $effectiveCaptured[] = $this->mutations[$card];
+            } else {
+                $effectiveCaptured[] = $card;
+            }
+        }
+
+        return $effectiveCaptured;
+    }
+
+    /**
+     * Ritorna le carte in mano a un giocatore, applicando eventuali mutazioni.
+     * @param string $pid
+     * @return array
+     */
+    public function getEffectivePlayerHandCards(string $pid): array
+    {
+        $hand = $this->players->get($pid)->hand;
+        $effectiveHand = [];
+
+        foreach ($hand as $card) {
+            if (isset($this->mutations[$card])) {
+                $effectiveHand[] = $this->mutations[$card];
+            } else {
+                $effectiveHand[] = $card;
+            }
+        }
+
+        return $effectiveHand;
+    }
+
+    public function getEffectiveCard(string $cardCode): string
+    {
+        return $this->mutations[$cardCode] ?? $cardCode;
+    }
+
+
 }

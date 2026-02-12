@@ -3,6 +3,8 @@
 namespace App\GameEngine;
 
 use App\GameEngine\Santi\SanBiagio;
+use App\GameEngine\Santi\SanPantaleone;
+use App\GameEngine\Santi\SantaCaterina;
 
 class GameConstants
 {
@@ -20,6 +22,8 @@ class GameConstants
 
     const SANTI = [
         'BIA' => SanBiagio::class,
+        'PAN' => SanPantaleone::class,
+        'CAT' => SantaCaterina::class
     ];
 
     public static function getCardValue(string $card): int
@@ -27,5 +31,15 @@ class GameConstants
         if (strlen($card) < 2) return 0;
         $valuePart = substr($card, 0, -1);
         return (int)$valuePart;
+    }
+
+    public static function getRandomValue(): int
+    {
+        return self::VALUES[array_rand(self::VALUES)];
+    }
+
+    public static function getRandomSuit(): string
+    {
+        return self::SUITS[array_rand(self::SUITS)];
     }
 }

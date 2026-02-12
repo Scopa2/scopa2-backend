@@ -4,6 +4,8 @@ namespace App\GameEngine;
 
 use App\Events\GameStateUpdated;
 use App\GameEngine\Santi\SanBiagio;
+use App\GameEngine\Santi\SanPantaleone;
+use App\GameEngine\Santi\SantaCaterina;
 use App\GameEngine\Santi\Santo;
 use App\GameEngine\ScoreCalculator;
 use Exception;
@@ -53,7 +55,7 @@ class ScopaEngine
         $this->distributeCards();
 
         // 4. Popola Shop (solo al primo round)
-        $this->state->shop = [SanBiagio::serializeForShop(), SanBiagio::serializeForShop(), SanBiagio::serializeForShop()]; // Esempio statico
+        $this->state->shop = [SanBiagio::serializeForShop(), SanPantaleone::serializeForShop(), SantaCaterina::serializeForShop()];
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
     }
 
@@ -208,7 +210,7 @@ class ScopaEngine
         }
 
         // 1. Calcola i punti del round appena concluso
-        $roundScores = ScoreCalculator::calculateRoundScore($this->state->players->toArray());
+        $roundScores = ScoreCalculator::calculateRoundScore($this->state);
 
         // 2. Aggiorna i punteggi totali
         $this->state->scores->addScore('p1', $roundScores['p1']['total']);
