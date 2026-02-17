@@ -20,6 +20,8 @@ class GameConstants
 
     const GAME_WIN_SCORE = 10;
 
+    const SANTO_SHOP_EXPIRY = 3; // Durata in turni dei santi acquistati
+
     const SANTI = [
         'BIA' => SanBiagio::class,
         'PAN' => SanPantaleone::class,
@@ -41,5 +43,14 @@ class GameConstants
     public static function getRandomSuit(): string
     {
         return self::SUITS[array_rand(self::SUITS)];
+    }
+
+    public static function getRandomSanto(): string
+    {
+        // array_rand returns a random key from the array
+        $randomKey = array_rand(self::SANTI);
+
+        // Return the value associated with that key (the ::class string)
+        return self::SANTI[$randomKey];
     }
 }

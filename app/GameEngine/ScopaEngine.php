@@ -55,7 +55,11 @@ class ScopaEngine
         $this->distributeCards();
 
         // 4. Popola Shop (solo al primo round)
-        $this->state->shop = [SanBiagio::serializeForShop(), SanPantaleone::serializeForShop(), SantaCaterina::serializeForShop()];
+        $this->state->shopExpirations = [GameConstants::SANTO_SHOP_EXPIRY, GameConstants::SANTO_SHOP_EXPIRY, GameConstants::SANTO_SHOP_EXPIRY];
+        for ($i = 0; $i < 3; $i++) {
+            $santoClass = GameConstants::getRandomSanto();
+            $this->state->shop[] = $santoClass::serialize($this->state->shopExpirations[$i]);
+        }
         $this->state->currentTurnPlayer = 'p1'; // Inizia P1
     }
 
@@ -122,7 +126,7 @@ class ScopaEngine
                 break; // NON cambia turno
 
             case GameConstants::TYPE_SANTO_USE:
-                $this->handleSanto($actorId, $action['santo_id'], $action['params']);
+                $this->handleSantoUse($actorId, $action['santo_id'], $action['params']);
                 break; // NON cambia turno
 
             case GameConstants::TYPE_CARD_PLAY:
@@ -135,17 +139,21 @@ class ScopaEngine
         $this->state->lastMovePgn = $pgnAction;
     }
 
-    private function handleSanto($pid, $santoId, $params)
+    private function handleSantoUse($pid, $santoId, $params): void
     {
         /** @var Santo $santo */
         $santo = GameConstants::SANTI[$santoId];
         $santo::apply($pid, $this->state, $params);
+        $this->state->players->get($pid)->removeSanto($santoId);
     }
 
     private function handleBuy($pid, $santoId, $paymentCards)
     {
-        //TODO: validate buy
-        $this->state->players->get($pid)->santi[] = GameConstants::SANTI[$santoId]::serializeForShop();
+        foreach ($paymentCards as $card) {
+            $this->state->players->get($pid)->removeFromCaptured($card);
+        }
+        $this->replaceSantoAtIndex(array_search($santoId, $this->state->shop));
+        $this->state->players->get($pid)->addSanto($santoId);
     }
 
     private function handleCardPlay($pid, $card, $targets)
@@ -200,7 +208,15 @@ class ScopaEngine
 
     private function advanceRound()
     {
-        // 0. Assegna le carte rimaste sul tavolo all'ultimo giocatore che ha fatto una presa
+        // Decrementa le scadenze degli Santi nello shop e rimuovi quelli scaduti
+        foreach ($this->state->shopExpirations as $idx => $expiry) {
+            $this->state->shopExpirations[$idx]--;
+            if ($this->state->shopExpirations[$idx] <= 0) {
+                $this->replaceSantoAtIndex($idx);
+            }
+        }
+
+        // Assegna le carte rimaste sul tavolo all'ultimo giocatore che ha fatto una presa
         if (!empty($this->state->table) && $this->state->lastCapturePlayer !== null) {
             $lastPlayer = $this->state->players->get($this->state->lastCapturePlayer);
             foreach ($this->state->table as $card) {
@@ -209,14 +225,14 @@ class ScopaEngine
             $this->state->table = []; // Svuota il tavolo
         }
 
-        // 1. Calcola i punti del round appena concluso
+        // Calcola i punti del round appena concluso
         $roundScores = ScoreCalculator::calculateRoundScore($this->state);
 
-        // 2. Aggiorna i punteggi totali
+        // Aggiorna i punteggi totali
         $this->state->scores->addScore('p1', $roundScores['p1']['total']);
         $this->state->scores->addScore('p2', $roundScores['p2']['total']);
 
-        // 3. Verifica condizione di vittoria
+        // Verifica condizione di vittoria
         if ($this->state->scores->hasWinner(GameConstants::GAME_WIN_SCORE)) {
             $this->state->isGameOver = true;
             ($this->onGameEnded)([
@@ -236,30 +252,37 @@ class ScopaEngine
             ]);
         }
 
-        // 4. Incrementa il contatore del round
+        // Incrementa il contatore del round
         $this->state->roundIndex++;
 
-        // 5. Resetta lo stato dei giocatori per il nuovo round
+        // Resetta lo stato dei giocatori per il nuovo round
         $this->state->players->resetForNewRound();
 
-        // 6. Inizializza il RNG con un seed deterministico basato sul seed della partita e il round
+        // Inizializza il RNG con un seed deterministico basato sul seed della partita e il round
         $roundSeed = $this->gameSeed . '_round_' . $this->state->roundIndex;
         $this->initializeRNG($roundSeed);
 
-        // 7. Crea un nuovo mazzo mescolato
+        // Crea un nuovo mazzo mescolato
         $this->createAndShuffleDeck();
 
-        // 8. Metti 4 carte a terra
+        // Metti 4 carte a terra
         $this->dealTableCards();
 
-        // 9. Distribuisci le carte ai giocatori
+        // Distribuisci le carte ai giocatori
         $this->distributeCards();
 
-        // 10. Alterna il primo giocatore che inizia (per equità)
+        // Alterna il primo giocatore che inizia (per equità)
         //$this->state->currentTurnPlayer = $this->state->currentTurnPlayer ?
 
-        // 11. Resetta il tracking dell'ultimo giocatore che ha catturato
+        // Resetta il tracking dell'ultimo giocatore che ha catturato
         $this->state->lastCapturePlayer = null;
+    }
+
+    private function replaceSantoAtIndex(int $index): void
+    {
+        $this->state->shopExpirations[$index] = GameConstants::SANTO_SHOP_EXPIRY;
+        $santoClass = GameConstants::getRandomSanto();
+        $this->state->shop[$index] = $santoClass::serialize($this->state->shopExpirations[$index]);
     }
 
 

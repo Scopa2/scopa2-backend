@@ -10,7 +10,7 @@ class PlayerState
     /**
      * @param array<string> $hand Carte correntemente in mano
      * @param array<string> $captured Mazzo delle carte prese (per punti e shop)
-     * @param array<string> $santi Santini acquistati e pronti all'uso
+     * @param array<string> $santi Santi acquistati e pronti all'uso
      * @param int $blood Sangue di San Gennaro (il "resto" dello shop)
      * @param int $scope Conteggio scope effettuate
      */
@@ -18,9 +18,11 @@ class PlayerState
         public array $hand = [],
         public array $captured = [],
         public array $santi = [],
-        public int $blood = 0,
-        public int $scope = 0,
-    ) {}
+        public int   $blood = 0,
+        public int   $scope = 0,
+    )
+    {
+    }
 
     /**
      * Verifica se il giocatore ha una carta in mano
@@ -29,6 +31,7 @@ class PlayerState
     {
         return in_array($cardCode, $this->hand);
     }
+
 
     /**
      * Verifica se il giocatore ha una carta tra le prese
@@ -70,6 +73,20 @@ class PlayerState
     }
 
     /**
+     * Rimuove una carta dalle prese
+     *
+     * @param string $card
+     * @return void
+     */
+    public function removeFromCaptured(string $card): void
+    {
+        $idx = array_search($card, $this->captured);
+        if ($idx !== false) {
+            array_splice($this->captured, $idx, 1);
+        }
+    }
+
+    /**
      * Resetta lo stato del giocatore per un nuovo round
      */
     public function resetForNewRound(): void
@@ -101,5 +118,23 @@ class PlayerState
             'blood' => $this->blood,
             'scope' => $this->scope,
         ];
+    }
+
+    public function removeSanto($santoId)
+    {
+        $idx = array_search($santoId, $this->santi);
+        if ($idx !== false) {
+            array_splice($this->santi, $idx, 1);
+        }
+    }
+
+    public function addSanto($santoId)
+    {
+        $this->santi[] = $santoId;
+    }
+
+    public function renderSanti(): array
+    {
+        return array_map(fn($santoId) => GameConstants::SANTI[$santoId]::serialize(), $this->santi);
     }
 }

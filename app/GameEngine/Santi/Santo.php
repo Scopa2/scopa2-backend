@@ -33,12 +33,13 @@ abstract class Santo
         return static::$cost ?? 0;
     }
 
-    public static function serializeForShop(): array {
+    public static function serialize($expiry = null): array {
         return [
             'id' => static::getId(),
             'name' => static::getName(),
             'description' => static::getDescription(),
-            'cost' => static::getCost()
+            'cost' => static::getCost(),
+            'expiry' => $expiry
         ];
     }
 }

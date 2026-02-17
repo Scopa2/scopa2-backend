@@ -20,6 +20,9 @@ class GameState
     /** @var array<array> Santi disponibili nello shop */
     public array $shop = [];
 
+    /** @var array<int> Expiry dei santi nello shop, indicizzati per posizione */
+    public array $shopExpirations = [];
+
     /** @var array<string, string> Carte diventate altre carte es. 4C => 4D per San Biagio */
     public array $mutations = [];
 
@@ -80,7 +83,7 @@ class GameState
             $playerView = [
                 'blood' => $playerState->blood,
                 'scope' => $playerState->scope,
-                'santi' => $playerState->santi,
+                'santi' => $playerState->renderSanti(),
                 'totalScore' => $this->scores->getScore($pid),
             ];
 
@@ -99,21 +102,6 @@ class GameState
         return $publicState;
     }
 
-    /**
-     * Utility per verificare se un giocatore possiede una carta
-     */
-    public function playerHasCard(string $pid, string $cardCode): bool
-    {
-        return $this->players->get($pid)->hasCardInHand($cardCode);
-    }
-
-    /**
-     * Utility per verificare se un giocatore ha una carta tra le prese (per lo shop)
-     */
-    public function playerHasCaptured(string $pid, string $cardCode): bool
-    {
-        return $this->players->get($pid)->hasCardCaptured($cardCode);
-    }
 
 
     /**
@@ -177,6 +165,7 @@ class GameState
         return $effectiveCaptured;
     }
 
+
     /**
      * Ritorna le carte in mano a un giocatore, applicando eventuali mutazioni.
      * @param string $pid
@@ -202,6 +191,8 @@ class GameState
     {
         return $this->mutations[$cardCode] ?? $cardCode;
     }
+
+
 
 
 }

@@ -20,6 +20,8 @@ class SantaCaterina extends Santo
 
     public static ?string $description = "Scambia la tua mano con quella del tuo avversario";
 
+    public static ?int $cost = 3;
+
     public static function apply(string $pid, GameState $state, array $params = []): void
     {
         $opponentId = $pid === 'p1' ? 'p2' : 'p1';
