@@ -147,13 +147,32 @@ class ScopaEngine
         $this->state->players->get($pid)->removeSanto($santoId);
     }
 
-    private function handleBuy($pid, $santoId, $paymentCards)
+    private function handleBuy($pid, $santoId, $paymentCards): void
     {
+        /** @var Santo $targetSanto */
+        $targetSanto = GameConstants::SANTI[$santoId];
+
+        // Player che compra
+        $targetPlayer = $this->state->players->get($pid);
+
+        $sacrificedCardsValue = 0;
         foreach ($paymentCards as $card) {
-            $this->state->players->get($pid)->removeFromCaptured($card);
+            $sacrificedCardsValue += GameUtilities::getCardBloodValue($this->state->getEffectiveCard($card));
+            $targetPlayer->removeFromCaptured($card);
         }
+
+        // Player is also using blood since he doesn't have enough cards to sacrifice
+        if ($sacrificedCardsValue < $targetSanto::$cost) {
+            $targetPlayer->removeBlood($targetSanto::$cost - $sacrificedCardsValue);
+        } // Player sacrifices more than needed, the remainder is converted to blood and added to the player
+        else {
+            $remainder = $sacrificedCardsValue - $targetSanto::$cost;
+            $targetPlayer->addBlood($remainder);
+        }
+
+        // Actually give the Santo to the player and replace it in the shop
         $this->replaceSantoAtIndex(array_search($santoId, $this->state->shop));
-        $this->state->players->get($pid)->addSanto($santoId);
+        $targetPlayer->addSanto($santoId);
     }
 
     private function handleCardPlay($pid, $card, $targets)
@@ -317,11 +336,11 @@ class ScopaEngine
 
         // 1. Cerca una presa
         foreach ($botHand as $cardInHand) {
-            $valueInHand = GameConstants::getCardValue($cardInHand);
+            $valueInHand = GameUtilities::getCardValue($cardInHand);
 
             // Cerca una carta singola da prendere
             foreach ($tableCards as $cardOnTable) {
-                if ($valueInHand === GameConstants::getCardValue($cardOnTable)) {
+                if ($valueInHand === GameUtilities::getCardValue($cardOnTable)) {
                     return $cardInHand . 'x' . $cardOnTable;
                 }
             }
@@ -332,7 +351,7 @@ class ScopaEngine
             if (count($tableCards) >= 2) {
                 for ($i = 0; $i < count($tableCards); $i++) {
                     for ($j = $i + 1; $j < count($tableCards); $j++) {
-                        if ($valueInHand === (GameConstants::getCardValue($tableCards[$i]) + GameConstants::getCardValue($tableCards[$j]))) {
+                        if ($valueInHand === (GameUtilities::getCardValue($tableCards[$i]) + GameUtilities::getCardValue($tableCards[$j]))) {
                             return $cardInHand . 'x' . $tableCards[$i] . '+' . $tableCards[$j];
                         }
                     }

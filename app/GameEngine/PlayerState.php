@@ -12,6 +12,7 @@ class PlayerState
      * @param array<string> $captured Mazzo delle carte prese (per punti e shop)
      * @param array<string> $santi Santi acquistati e pronti all'uso
      * @param int $blood Sangue di San Gennaro (il "resto" dello shop)
+     * @param int $solidBlood Sangue che non può essere utilizzato finché sciolto
      * @param int $scope Conteggio scope effettuate
      */
     public function __construct(
@@ -19,6 +20,7 @@ class PlayerState
         public array $captured = [],
         public array $santi = [],
         public int   $blood = 0,
+        public int   $solidBlood = 0,
         public int   $scope = 0,
     )
     {
@@ -137,4 +139,15 @@ class PlayerState
     {
         return array_map(fn($santoId) => GameConstants::SANTI[$santoId]::serialize(), $this->santi);
     }
+
+    public function addBlood(int $blood): void
+    {
+        $this->blood = min($this->blood + $blood, GameConstants::MAX_BLOOD_PER_PLAYER);
+    }
+
+    public function removeBlood(int $bloodSacrifice): void
+    {
+        $this->blood = max(0, $this->blood - $bloodSacrifice);
+    }
+
 }

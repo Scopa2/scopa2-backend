@@ -113,7 +113,7 @@ class GameState
     public function mutateCardValue(string $cardCode, string $newValue): void
     {
         $effectiveCardCode = $this->getEffectiveCard($cardCode);
-        $suit = substr($effectiveCardCode, -1);
+        $suit = GameUtilities::getCardSuit($effectiveCardCode);
         $mutatedCard = $newValue . $suit;
         $this->mutations[$cardCode] = $mutatedCard;
     }
@@ -127,7 +127,7 @@ class GameState
     public function mutateCardSuit(string $cardCode, string $newSuit): void
     {
         $effectiveCardCode = $this->getEffectiveCard($cardCode);
-        $value = substr($effectiveCardCode, 0, -1);
+        $value = GameUtilities::getCardValue($effectiveCardCode);
         $mutatedCard = $value . $newSuit;
         $this->mutations[$cardCode] = $mutatedCard;
     }

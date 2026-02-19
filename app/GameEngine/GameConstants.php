@@ -22,18 +22,20 @@ class GameConstants
 
     const SANTO_SHOP_EXPIRY = 3; // Durata in turni dei santi acquistati
 
+    const MAX_BLOOD_PER_PLAYER = 20; // Limite massimo di sangue che un giocatore può accumulare
+
     const SANTI = [
         'BIA' => SanBiagio::class,
         'PAN' => SanPantaleone::class,
         'CAT' => SantaCaterina::class
     ];
 
-    public static function getCardValue(string $card): int
-    {
-        if (strlen($card) < 2) return 0;
-        $valuePart = substr($card, 0, -1);
-        return (int)$valuePart;
-    }
+    const CARD_SUIT_SHOP_ADDED_VALUES = [
+        'D' => 3,
+        'C' => 2,
+        'S' => 1,
+        'B' => 0
+    ];
 
     public static function getRandomValue(): int
     {
