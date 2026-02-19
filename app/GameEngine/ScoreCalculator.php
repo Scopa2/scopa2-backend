@@ -24,10 +24,10 @@ class ScoreCalculator
     /**
      * Calcola i punti per entrambi i giocatori alla fine di un round
      *
-     * @param array $players Stato dei giocatori con le carte catturate
+     * @param GameState $state Lo stato attuale del gioco, con le carte catturate dai giocatori
      * @return array Punteggi dettagliati per entrambi i giocatori
      */
-    public static function calculateRoundScore(array $players): array
+    public static function calculateRoundScore(GameState $state): array
     {
         $template = [
             'settebello' => false,
@@ -46,7 +46,7 @@ class ScoreCalculator
         ];
 
         // 1. Punti per le Scope
-        foreach ($players as $playerKey => $player) {
+        foreach ($state->players as $playerKey => $player) {
             $scopaCount = $player['scope'] ?? 0;
             if ($scopaCount > 0) {
                 $scores[$playerKey]['total'] += $scopaCount;
@@ -55,8 +55,8 @@ class ScoreCalculator
         }
 
         // 2. Punti per i 7 di Denari (Settebello)
-        foreach ($players as $playerKey => $player) {
-            $settebelloCount = self::countSettebello($player['captured']);
+        foreach ($state->players as $playerKey => $player) {
+            $settebelloCount = self::countSettebello($state->getEffectivePlayerCapturedCards($playerKey));
             if ($settebelloCount > 0) {
                 $scores[$playerKey]['total'] += $settebelloCount;
                 $scores[$playerKey]['settebello'] = true;
@@ -65,23 +65,23 @@ class ScoreCalculator
         }
 
         // 3. Punto per chi ha più carte (Allungo)
-        $allungoWinner = self::calculateAllungo($players);
+        $allungoWinner = self::calculateAllungo($state->players->toArray());
         if ($allungoWinner !== null) {
             $scores[$allungoWinner]['total'] += 1;
             $scores[$allungoWinner]['allungo'] = true;
-            $scores[$allungoWinner]['cardsCaptured'] = count($players[$allungoWinner]['captured']);
+            $scores[$allungoWinner]['cardsCaptured'] = count($state->players->toArray()[$allungoWinner]['captured']);
         }
 
         // 4. Punto per chi ha più Denari
-        $denariWinner = self::calculateDenari($players);
+        $denariWinner = self::calculateDenari($state);
         if ($denariWinner !== null) {
             $scores[$denariWinner]['total'] += 1;
             $scores[$denariWinner]['denari'] = true;
-            $scores[$denariWinner]['denariCount'] = self::countDenari($players[$denariWinner]['captured']);
+            $scores[$denariWinner]['denariCount'] = self::countDenari($state->getEffectivePlayerCapturedCards($denariWinner));
         }
 
         // 5. Punto per la Primiera
-        $primieraWinner = self::calculatePrimiera($players);
+        $primieraWinner = self::calculatePrimiera($state);
         if ($primieraWinner !== null) {
             $scores[$primieraWinner]['total'] += 1;
             $scores[$primieraWinner]['primiera'] = true;
@@ -128,10 +128,10 @@ class ScoreCalculator
      * Calcola chi ha più carte di Denari
      * Ritorna 'p1', 'p2' o null in caso di parità
      */
-    private static function calculateDenari(array $players): ?string
+    private static function calculateDenari(GameState $state): ?string
     {
-        $p1Denari = self::countDenari($players['p1']['captured']);
-        $p2Denari = self::countDenari($players['p2']['captured']);
+        $p1Denari = self::countDenari($state->getEffectivePlayerCapturedCards('p1'));
+        $p2Denari = self::countDenari($state->getEffectivePlayerCapturedCards('p2'));
 
         if ($p1Denari > $p2Denari) {
             return 'p1';
@@ -162,10 +162,10 @@ class ScoreCalculator
      * Calcola chi vince la Primiera
      * Ritorna 'p1', 'p2' o null se uno dei due non ha tutte e 4 i semi
      */
-    private static function calculatePrimiera(array $players): ?string
+    private static function calculatePrimiera(GameState $state): ?string
     {
-        $p1Score = self::getPrimieraScore($players['p1']['captured']);
-        $p2Score = self::getPrimieraScore($players['p2']['captured']);
+        $p1Score = self::getPrimieraScore($state->getEffectivePlayerCapturedCards('p1'));
+        $p2Score = self::getPrimieraScore($state->getEffectivePlayerCapturedCards('p2'));
 
         // Se uno dei due non ha tutte e 4 i semi, nessuno vince la primiera
         if ($p1Score === null || $p2Score === null) {

@@ -22,7 +22,7 @@ class ScopaNotationParser
         if (str_starts_with($actionString, '@')) {
             preg_match('/@([A-Z0-9]+)(?:\[(.*)\])?/', $actionString, $matches);
             return [
-                'type' => GameConstants::TYPE_MODIFIER_USE,
+                'type' => GameConstants::TYPE_SANTO_USE,
                 'santo_id' => $matches[1],
                 'params' => isset($matches[2]) ? explode('|', $matches[2]) : []
             ];

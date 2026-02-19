@@ -3,6 +3,7 @@
 namespace App\GameEngine;
 
 use App\GameEngine\GameConstants;
+use App\GameEngine\Santi\Santo;
 
 /**
  * Rappresenta lo stato atomico della partita in una dato momento.
@@ -10,58 +11,54 @@ use App\GameEngine\GameConstants;
  */
 class GameState
 {
-    // Stato del tavolo e mazzo
+    /** @var array<string> Carte nel mazzo */
     public array $deck = [];
+
+    /** @var array<string> Carte sul tavolo */
     public array $table = [];
+
+    /** @var array<array> Santi disponibili nello shop */
     public array $shop = [];
 
-    // Stato dei giocatori
-    public array $players = [];
+    /** @var array<int> Expiry dei santi nello shop, indicizzati per posizione */
+    public array $shopExpirations = [];
+
+    /** @var array<string, string> Carte diventate altre carte es. 4C => 4D per San Biagio */
+    public array $mutations = [];
+
+    /** Stato dei giocatori */
+    public Players $players;
+
     public string $currentTurnPlayer = 'p1';
     public bool $isGameOver = false;
 
     public int $roundIndex = 1;
     public int $turnIndex = 1;
 
-    // Punteggi totali dei giocatori
-    public array $scores = [
-        'p1' => 0,
-        'p2' => 0
-    ];
+    /** Punteggi totali dei giocatori */
+    public GameScores $scores;
 
-    // Ultimo giocatore che ha fatto una presa (per assegnare le carte rimaste)
+    /** Ultimo giocatore che ha fatto una presa (per assegnare le carte rimaste) */
     public ?string $lastCapturePlayer = null;
 
-    // Ultima mossa PGN (per animazioni client)
+    /** Ultima mossa PGN (per animazioni client) */
     public ?string $lastMovePgn = null;
 
     public function __construct()
     {
-        // Inizializzazione struttura dati giocatori
-        $template = [
-            'hand' => [],       // Carte correntemente in mano
-            'captured' => [],   // Mazzo delle carte prese (per punti e shop)
-            'santi' => [],      // Santini acquistati e pronti all'uso
-            'blood' => 0,       // Sangue di San Gennaro (il "resto" dello shop)
-            'scope' => 0        // Conteggio scope effettuate
-        ];
-
-        $this->players = [
-            'p1' => $template,
-            'p2' => $template
-        ];
+        $this->players = new Players();
+        $this->scores = new GameScores();
     }
 
     /**
      * Trasforma lo stato interno in una "Proiezione" pubblica.
      * Risolve il TypeError trasformando i dati per il trasporto (Marshaling).
-     * * @param string $viewerId L'ID del giocatore che richiede la vista (p1 o p2)
+     *
+     * @param string $viewerId L'ID del giocatore che richiede la vista (p1 o p2)
      * @return array Lo stato sanificato per il client
      */
     public function toPublicView(string $viewerId): array
     {
-        // Creiamo una rappresentazione array dello stato attuale
-        // Questo evita crash di tipo perché non modifichiamo le proprietà della classe
         $publicState = [
             'table' => $this->table,
             'shop' => $this->shop,
@@ -72,59 +69,130 @@ class GameState
             'turnIndex' => $this->turnIndex,
             'lastCapturePlayer' => $this->lastCapturePlayer,
             'lastMovePgn' => $this->lastMovePgn,
-            // Trasmettiamo il mazzo come array di placeholder 'X' della stessa lunghezza
+            // TODO: le mutazioni possono far visualizzare le carte dell'avversario,
+            // ad esempio con San Biagio, quindi vanno gestite con attenzione.
+            // Forse è meglio non esporle direttamente e applicarle solo alla vista del giocatore che le ha attivate?
+            'mutations' => $this->mutations,
             'deck' => array_fill(0, count($this->deck), GameConstants::CARD_BACK),
-            'players' => []
+            'players' => [],
         ];
 
-        foreach ($this->players as $pid => $data) {
-            $isOwner = ($pid === $viewerId); //DEBUG
+        foreach ($this->players->all() as $pid => $playerState) {
+            $isOwner = ($pid === $viewerId);
 
-            // Logica di mascheramento (Information Hiding)
             $playerView = [
-                'blood' => $data['blood'],
-                'scope' => $data['scope'],
-                'santi' => $data['santi'], // I santi posseduti sono solitamente visibili
-                'totalScore' => $this->scores[$pid], // Punteggio totale del giocatore
+                'blood' => $playerState->blood,
+                'scope' => $playerState->scope,
+                'santi' => $playerState->renderSanti(),
+                'totalScore' => $this->scores->getScore($pid),
             ];
 
-            // Gestione Mano
             if ($isOwner) {
-                // Se sono io, vedo le mie carte
-                $playerView['hand'] = $data['hand'];
-                // Vedo anche esattamente cosa ho preso (per decidere cosa sacrificare allo shop)
-                $playerView['captured'] = $data['captured'];
+                $playerView['hand'] = $playerState->hand;
+                $playerView['captured'] = $playerState->captured;
             } else {
-                // Se è l'avversario, vedo solo quante carte ha, rappresentate come placeholder
-                $count = count($data['hand']);
+                $count = count($playerState->hand);
                 $playerView['hand'] = array_fill(0, $count, GameConstants::CARD_BACK);
-
-                // Per le carte prese (captured) mostriamo lo stesso numero di placeholder
-                // così che i client possano trattarle come una collezione di slot modificabili.
-                $playerView['captured'] = $data['captured'];
-                //$playerView['captured'] = array_fill(0, count($data['captured']), GameConstants::CARD_BACK);
+                $playerView['captured'] = $playerState->captured;
             }
 
             $publicState['players'][$pid] = $playerView;
         }
 
-
         return $publicState;
     }
 
+
+
     /**
-     * Utility per verificare se un giocatore possiede una carta
+     * Cambia il valore di una carta, ad esempio 3C => 1C, mantenendo il seme.
+     * @param string $cardCode
+     * @param string $newValue
+     * @return void
      */
-    public function playerHasCard(string $pid, string $cardCode): bool
+    public function mutateCardValue(string $cardCode, string $newValue): void
     {
-        return in_array($cardCode, $this->players[$pid]['hand']);
+        $effectiveCardCode = $this->getEffectiveCard($cardCode);
+        $suit = GameUtilities::getCardSuit($effectiveCardCode);
+        $mutatedCard = $newValue . $suit;
+        $this->mutations[$cardCode] = $mutatedCard;
     }
 
     /**
-     * Utility per verificare se un giocatore ha una carta tra le prese (per lo shop)
+     * Cambia il seme di una carta, ad esempio 3C => 3D, mantenendo il valore.
+     * @param string $cardCode
+     * @param string $newSuit
+     * @return void
      */
-    public function playerHasCaptured(string $pid, string $cardCode): bool
+    public function mutateCardSuit(string $cardCode, string $newSuit): void
     {
-        return in_array($cardCode, $this->players[$pid]['captured']);
+        $effectiveCardCode = $this->getEffectiveCard($cardCode);
+        $value = GameUtilities::getCardValue($effectiveCardCode);
+        $mutatedCard = $value . $newSuit;
+        $this->mutations[$cardCode] = $mutatedCard;
     }
+
+    /**
+     * Cambia completamente una carta in un'altra, ad esempio 3C => 1D.
+     * @param string $cardCode
+     * @param string $newCardCode
+     * @return void
+     */
+    public function mutateCard(string $cardCode, string $newCardCode): void
+    {
+        $this->mutations[$cardCode] = $newCardCode;
+    }
+
+
+    /**
+     * Ritorna le carte catturate da un giocatore, applicando eventuali mutazioni.
+     * @param string $pid
+     * @return array
+     */
+    public function getEffectivePlayerCapturedCards(string $pid): array
+    {
+        $captured = $this->players->get($pid)->captured;
+        $effectiveCaptured = [];
+
+        foreach ($captured as $card) {
+            if (isset($this->mutations[$card])) {
+                $effectiveCaptured[] = $this->mutations[$card];
+            } else {
+                $effectiveCaptured[] = $card;
+            }
+        }
+
+        return $effectiveCaptured;
+    }
+
+
+    /**
+     * Ritorna le carte in mano a un giocatore, applicando eventuali mutazioni.
+     * @param string $pid
+     * @return array
+     */
+    public function getEffectivePlayerHandCards(string $pid): array
+    {
+        $hand = $this->players->get($pid)->hand;
+        $effectiveHand = [];
+
+        foreach ($hand as $card) {
+            if (isset($this->mutations[$card])) {
+                $effectiveHand[] = $this->mutations[$card];
+            } else {
+                $effectiveHand[] = $card;
+            }
+        }
+
+        return $effectiveHand;
+    }
+
+    public function getEffectiveCard(string $cardCode): string
+    {
+        return $this->mutations[$cardCode] ?? $cardCode;
+    }
+
+
+
+
 }

@@ -53,7 +53,7 @@ class MoveValidator
                 //TODO: Implement buy validation logic
                 break; // NON cambia turno
 
-            case GameConstants::TYPE_MODIFIER_USE:
+            case GameConstants::TYPE_SANTO_USE:
                 //TODO: Implement modifier use validation logic
                 break; // NON cambia turno
 
@@ -73,7 +73,7 @@ class MoveValidator
         $state = $this->engine->getState();
 
         // Check if player has this card in hand
-        if (!$state->playerHasCard($this->pid, $card)) {
+        if (!$state->players->get($this->pid)->hasCardInHand($card)) {
             $this->errors[] = "You don't have the card {$card} in your hand.";
             return false;
         }
