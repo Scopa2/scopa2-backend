@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount | default 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        # Force restart when ConfigMap changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      securityContext:
+        fsGroup: 2000
+      containers:
+        - name: scopa2-app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          # --- PROBES (From your working config) ---
+          livenessProbe:
+            httpGet:
+              path: / # Change to /up if your app has a health endpoint
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          env:
+            - name: DB_PORT
+              value: {{ .Values.db.port | quote }}
+            - name: DB_DATABASE
+              value: {{ .Values.db.database | quote }}
+            - name: DB_HOST
+              value: "{{ .Values.db.localNode }},{{ .Values.db.backups }}"
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-db-config
+
+          # --- STORAGE FIX: This stops the 'unable to autosave' error ---
+          volumeMounts:
+            - name: app-data
+              mountPath: /app/pb_data # Adjust if your app uses a different data folder
+            - name: tmp-storage
+              mountPath: /tmp
+
+      volumes:
+        - name: app-data
+          emptyDir: {}
+        - name: tmp-storage
+          emptyDir: {}

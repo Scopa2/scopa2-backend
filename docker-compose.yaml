@@ -1,6 +1,9 @@
   services:
     app:
-      image: scopa2:latest
+      image: scopa2-dev:latest
+      build:
+        context: .
+        dockerfile: Dockerfile
       container_name: scopa2-dev
       user: root
       volumes:
@@ -17,7 +20,8 @@
         - APP_MAINTENANCE_STORE=file
       depends_on:
         - db
-      entrypoint: ["tail", "-f", "/dev/null"]
+      ports:
+        - "8000:8000"
 
     db:
       image: postgres:16-alpine
