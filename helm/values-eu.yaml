@@ -1,0 +1,6 @@
+ingress:
+  host: "eu.scopa.local"
+
+db:
+  localNode: "yb-tserver-0.yb-tservers.db.svc.cluster.local"
+  backups: "yb-tserver-1.yb-tservers.db.svc.cluster.local,yb-tserver-2.yb-tservers.db.svc.cluster.local"

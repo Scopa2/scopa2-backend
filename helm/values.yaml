@@ -1,0 +1,21 @@
+replicaCount: 2
+
+image:
+  repository: scopa2
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+
+ingress:
+  host: "scopa.local"
+
+db:
+  port: "5433"
+  database: "yugabyte"
+
+# Global Env Vars
+env:
+  OCTANE_HTTPS: "true"
+  # Add other shared vars here
