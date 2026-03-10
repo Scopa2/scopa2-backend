@@ -1,0 +1,60 @@
+# yugabyte-values.yaml
+
+# --- GLOBAL TOPOLOGY ---
+replicas:
+  master: 3   # The 'Brain' nodes. 3 is required for Raft consensus (Quorum). 
+              # If 1 node dies, the remaining 2 can still elect a leader.
+  tserver: 3  # The 'Worker' nodes. These store the data and handle SQL queries.
+              # In your simulation, these will act as EU, US, and Backup nodes.
+
+# --- NETWORKING ---
+enableLoadBalancer: true # Tells Minikube to assign an External-IP. 
+                         # This is what 'minikube tunnel' connects to so you can 
+                         # access the DB from your Mac (e.g., for Laravel migrations).
+
+# --- RESOURCE MANAGEMENT (The 'Perfect Fit' Math) ---
+resource:
+  master:
+    requests:
+      cpu: "100m"      # Reserved CPU (0.1 cores). Guaranteed to the Master pods.
+      memory: "256Mi"  # Reserved RAM. Low because Masters only handle metadata.
+    limits:
+      cpu: "200m"      # Maximum CPU burst allowed if the node is busy.
+      memory: "512Mi"  # Hard ceiling for RAM to prevent crashing the whole Mac.
+      
+  tserver:
+    requests:
+      cpu: "200m"      # Workers do more heavy lifting (SQL processing).
+      memory: "512Mi"  # Guaranteed RAM for data operations.
+    limits:
+      cpu: "500m"      # Allows doubling CPU speed during heavy matchmaking.
+      memory: "1024Mi" # Allows up to 1GB RAM burst per node.
+
+# --- VIRTUAL GEO-PLACEMENT (The "30 e Lode" Magic) ---
+tserver:
+  extraEnv:
+    # Uses the Kubernetes Downward API to inject the pod's unique name 
+    # (yb-tserver-0, yb-tserver-1, etc.) into the container's environment.
+    - name: MY_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+
+  extraArgs:
+    # These flags tell the database process its "Physical" location.
+    - "--placement_cloud=minikube" # Arbitrary cloud provider name for the demo.
+    - "--placement_region=global"   # Treats the cluster as a single global entity.
+    # CRITICAL: Resolves the Pod name to assign each node to a unique zone.
+    # This allows you to say: "Node 0 is Europe, Node 2 is USA."
+    - "--placement_zone=zone-$(MY_POD_NAME)"
+
+# --- PERSISTENCE (The 'Stateful' part) ---
+storage:
+  master:
+    size: 2Gi   # Space for the Raft logs and system catalog.
+  tserver:
+    size: 5Gi   # Space for your actual 'games' table and card data.
+
+# --- OPTIMIZATION ---
+enablePrometheus: false # Disables the built-in monitoring stack. 
+                        # Great for saving ~1GB of RAM on your laptop.
