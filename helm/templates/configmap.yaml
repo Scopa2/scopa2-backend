@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-db-config
+data:
+  LOCAL_NODE: {{ .Values.db.localNode | quote }}
+  BACKUPS: {{ .Values.db.backups | quote }}

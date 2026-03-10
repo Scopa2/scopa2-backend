@@ -1,0 +1,8 @@
+https://host  {
+    root * /var/www/scopa2/public
+    file_server
+
+    php_fastcgi unix//var/www/scopa2/fpm.sock {
+        index index.php
+    }
+}

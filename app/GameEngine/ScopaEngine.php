@@ -1,0 +1,366 @@
+<?php
+
+namespace App\GameEngine;
+
+use App\Events\GameStateUpdated;
+use App\GameEngine\Santi\SanBiagio;
+use App\GameEngine\Santi\SanPantaleone;
+use App\GameEngine\Santi\SantaCaterina;
+use App\GameEngine\Santi\Santo;
+use App\GameEngine\ScoreCalculator;
+use Exception;
+
+class ScopaEngine
+{
+    private GameState $state;
+    private string $gameSeed; // Seed della partita
+    private \Closure $onRoundEnded;
+    private \Closure $onGameEnded;
+    private bool $isReplaying = false;
+
+
+    public function __construct(string $seed, callable $onRoundEnded = null, callable $onGameEnded = null)
+    {
+        $this->state = new GameState();
+        $this->gameSeed = $seed;
+        $this->onRoundEnded = $onRoundEnded ?? function () {
+        };
+        $this->onGameEnded = $onGameEnded ?? function () {
+        };
+
+        // Inizializza RNG deterministico per il primo round
+        $this->initializeRNG($seed);
+
+        // Setup Iniziale (Mazzo, Tavolo, Shop)
+        $this->initializeGame();
+    }
+
+    /**
+     * Inizializza il RNG con un seed specifico
+     */
+    private function initializeRNG(string $seed): void
+    {
+        mt_srand(crc32($seed));
+    }
+
+    private function initializeGame()
+    {
+        // 1. Crea e mescola il mazzo
+        $this->createAndShuffleDeck();
+
+        // 2. Metti 4 carte a terra
+        $this->dealTableCards();
+
+        // 3. Dai 3 carte a testa
+        $this->distributeCards();
+
+        // 4. Popola Shop (solo al primo round)
+        $this->state->shopExpirations = [GameConstants::SANTO_SHOP_EXPIRY, GameConstants::SANTO_SHOP_EXPIRY, GameConstants::SANTO_SHOP_EXPIRY];
+        for ($i = 0; $i < 3; $i++) {
+            $santoClass = GameConstants::getRandomSanto();
+            $this->state->shop[] = $santoClass::serialize($this->state->shopExpirations[$i]);
+        }
+        $this->state->currentTurnPlayer = 'p1'; // Inizia P1
+    }
+
+    /**
+     * Crea un nuovo mazzo di 40 carte e lo mescola
+     */
+    private function createAndShuffleDeck(): void
+    {
+        $this->state->deck = [];
+        foreach (GameConstants::SUITS as $s) {
+            foreach (GameConstants::VALUES as $v) {
+                $this->state->deck[] = $v . $s;
+            }
+        }
+        shuffle($this->state->deck); // Mescola usando il seed globale
+    }
+
+    /**
+     * Mette 4 carte sul tavolo dal mazzo
+     */
+    private function dealTableCards(): void
+    {
+        $this->state->table = [];
+        for ($i = 0; $i < 4; $i++) {
+            $this->state->table[] = array_pop($this->state->deck);
+        }
+    }
+
+    private function distributeCards(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->state->players->p1->addToHand(array_pop($this->state->deck));
+            $this->state->players->p2->addToHand(array_pop($this->state->deck));
+        }
+    }
+
+    // --- REPLAY SYSTEM ---
+    public function replay(array $historyEvents): GameState
+    {
+        $this->isReplaying = true;
+        foreach ($historyEvents as $event) {
+            // $event è il modello Eloquent GameEvent
+            $this->applyAction($event->actor_id, $event->pgn_action);
+        }
+        $this->isReplaying = false;
+        return $this->state;
+    }
+
+    // --- EXECUTION ---
+    public function applyAction(string $actorId, string $pgnAction)
+    {
+        // 1. Check turno (tranne per setup speciali, qui è strict)
+        if ($this->state->currentTurnPlayer !== $actorId) {
+            throw new Exception("Non è il turno del giocatore $actorId");
+        }
+
+        // 2. Parse
+        $action = ScopaNotationParser::parse($pgnAction);
+
+        // 3. Dispatch
+        switch ($action['type']) {
+            case GameConstants::TYPE_SHOP_BUY:
+                $this->handleBuy($actorId, $action['santo_id'], $action['payment']);
+                break; // NON cambia turno
+
+            case GameConstants::TYPE_SANTO_USE:
+                $this->handleSantoUse($actorId, $action['santo_id'], $action['params']);
+                break; // NON cambia turno
+
+            case GameConstants::TYPE_CARD_PLAY:
+                $this->handleCardPlay($actorId, $action['card'], $action['targets']);
+                // QUI cambia turno
+                $this->advanceTurn();
+                break;
+        }
+
+        $this->state->lastMovePgn = $pgnAction;
+    }
+
+    private function handleSantoUse($pid, $santoId, $params): void
+    {
+        /** @var Santo $santo */
+        $santo = GameConstants::SANTI[$santoId];
+        $santo::apply($pid, $this->state, $params);
+        $this->state->players->get($pid)->removeSanto($santoId);
+    }
+
+    private function handleBuy($pid, $santoId, $paymentCards): void
+    {
+        /** @var Santo $targetSanto */
+        $targetSanto = GameConstants::SANTI[$santoId];
+
+        // Player che compra
+        $targetPlayer = $this->state->players->get($pid);
+
+        $sacrificedCardsValue = 0;
+        foreach ($paymentCards as $card) {
+            $sacrificedCardsValue += GameUtilities::getCardBloodValue($this->state->getEffectiveCard($card));
+            $targetPlayer->removeFromCaptured($card);
+        }
+
+        // Player is also using blood since he doesn't have enough cards to sacrifice
+        if ($sacrificedCardsValue < $targetSanto::$cost) {
+            $targetPlayer->removeBlood($targetSanto::$cost - $sacrificedCardsValue);
+        } // Player sacrifices more than needed, the remainder is converted to blood and added to the player
+        else {
+            $remainder = $sacrificedCardsValue - $targetSanto::$cost;
+            $targetPlayer->addBlood($remainder);
+        }
+
+        // Actually give the Santo to the player and replace it in the shop
+        $this->replaceSantoAtIndex(array_search($santoId, $this->state->shop));
+        $targetPlayer->addSanto($santoId);
+    }
+
+    private function handleCardPlay($pid, $card, $targets)
+    {
+        // Togli carta dalla mano
+        $player = $this->state->players->get($pid);
+        $player->removeFromHand($card);
+
+        if (empty($targets)) {
+            // Scarto
+            $this->state->table[] = $card;
+        } else {
+            // Presa - Traccia l'ultimo giocatore che ha catturato
+            $this->state->lastCapturePlayer = $pid;
+
+            // Rimuovi target dal tavolo
+            $player->addToCaptured($card);
+            foreach ($targets as $t) {
+                $tIdx = array_search($t, $this->state->table);
+                if ($tIdx !== false) {
+                    array_splice($this->state->table, $tIdx, 1);
+                }
+                $player->addToCaptured($t);
+            }
+
+            // Controlla se è scopa
+            if (empty($this->state->table)) {
+                $player->incrementScope();
+            }
+        }
+    }
+
+    private function advanceTurn()
+    {
+        // Increment turn index
+        $this->state->turnIndex++;
+
+        // Redistriuzione carte se entrambe le mani sono vuote
+        if (empty($this->state->players->p1->hand) && empty($this->state->players->p2->hand)) {
+            // Se il mazzo è vuoto, termina il round
+            if (empty($this->state->deck)) {
+                $this->advanceRound();
+                return;
+            }
+            $this->distributeCards();
+        }
+
+        // Toggle Player
+        $this->state->currentTurnPlayer =
+            ($this->state->currentTurnPlayer === 'p1') ? 'p2' : 'p1';
+    }
+
+    private function advanceRound()
+    {
+        // Decrementa le scadenze degli Santi nello shop e rimuovi quelli scaduti
+        foreach ($this->state->shopExpirations as $idx => $expiry) {
+            $this->state->shopExpirations[$idx]--;
+            if ($this->state->shopExpirations[$idx] <= 0) {
+                $this->replaceSantoAtIndex($idx);
+            }
+        }
+
+        // Assegna le carte rimaste sul tavolo all'ultimo giocatore che ha fatto una presa
+        if (!empty($this->state->table) && $this->state->lastCapturePlayer !== null) {
+            $lastPlayer = $this->state->players->get($this->state->lastCapturePlayer);
+            foreach ($this->state->table as $card) {
+                $lastPlayer->addToCaptured($card);
+            }
+            $this->state->table = []; // Svuota il tavolo
+        }
+
+        // Calcola i punti del round appena concluso
+        $roundScores = ScoreCalculator::calculateRoundScore($this->state);
+
+        // Aggiorna i punteggi totali
+        $this->state->scores->addScore('p1', $roundScores['p1']['total']);
+        $this->state->scores->addScore('p2', $roundScores['p2']['total']);
+
+        // Verifica condizione di vittoria
+        if ($this->state->scores->hasWinner(GameConstants::GAME_WIN_SCORE)) {
+            $this->state->isGameOver = true;
+            ($this->onGameEnded)([
+                'lastCapturePlayer' => $this->getState()->lastCapturePlayer,
+                'roundScores' => $roundScores,
+                'gameScores' => $this->getState()->scores->toArray(),
+                'winner' => $this->getState()->scores->getWinner()
+            ]);
+            return;
+        }
+
+        // Emetti evento di fine round (utile per il controller)
+        if (!$this->isReplaying) {
+            ($this->onRoundEnded)([
+                'lastCapturePlayer' => $this->state->lastCapturePlayer,
+                'roundScores' => $roundScores,
+            ]);
+        }
+
+        // Incrementa il contatore del round
+        $this->state->roundIndex++;
+
+        // Resetta lo stato dei giocatori per il nuovo round
+        $this->state->players->resetForNewRound();
+
+        // Inizializza il RNG con un seed deterministico basato sul seed della partita e il round
+        $roundSeed = $this->gameSeed . '_round_' . $this->state->roundIndex;
+        $this->initializeRNG($roundSeed);
+
+        // Crea un nuovo mazzo mescolato
+        $this->createAndShuffleDeck();
+
+        // Metti 4 carte a terra
+        $this->dealTableCards();
+
+        // Distribuisci le carte ai giocatori
+        $this->distributeCards();
+
+        // Alterna il primo giocatore che inizia (per equità)
+        //$this->state->currentTurnPlayer = $this->state->currentTurnPlayer ?
+
+        // Resetta il tracking dell'ultimo giocatore che ha catturato
+        $this->state->lastCapturePlayer = null;
+    }
+
+    private function replaceSantoAtIndex(int $index): void
+    {
+        $this->state->shopExpirations[$index] = GameConstants::SANTO_SHOP_EXPIRY;
+        $santoClass = GameConstants::getRandomSanto();
+        $this->state->shop[$index] = $santoClass::serialize($this->state->shopExpirations[$index]);
+    }
+
+
+    /**
+     * Ritorna lo stato attuale del gioco.
+     * Fondamentale per il controller dopo aver applicato le mosse.
+     */
+    public function getState(): GameState
+    {
+        return $this->state;
+    }
+
+    /**
+     * Metodo opzionale utile per il debug:
+     * Ritorna un log testuale di cosa l'engine "vede" al momento.
+     */
+    public function dumpState(): string
+    {
+        return sprintf(
+            "Turno: %s | Tavolo: %s | Mazzo: %d",
+            $this->state->currentTurnPlayer,
+            implode(', ', $this->state->table),
+            count($this->state->deck)
+        );
+    }
+
+    public function getBestBotAction(): string
+    {
+        $botId = 'p2';
+        $botHand = $this->state->players->p2->hand;
+        $tableCards = $this->state->table;
+
+        // 1. Cerca una presa
+        foreach ($botHand as $cardInHand) {
+            $valueInHand = GameUtilities::getCardValue($cardInHand);
+
+            // Cerca una carta singola da prendere
+            foreach ($tableCards as $cardOnTable) {
+                if ($valueInHand === GameUtilities::getCardValue($cardOnTable)) {
+                    return $cardInHand . 'x' . $cardOnTable;
+                }
+            }
+
+            // Cerca una combinazione di carte da prendere (somma)
+            // Questo è un esempio semplificato, per N carte la complessità aumenta.
+            // Qui consideriamo solo 2 carte.
+            if (count($tableCards) >= 2) {
+                for ($i = 0; $i < count($tableCards); $i++) {
+                    for ($j = $i + 1; $j < count($tableCards); $j++) {
+                        if ($valueInHand === (GameUtilities::getCardValue($tableCards[$i]) + GameUtilities::getCardValue($tableCards[$j]))) {
+                            return $cardInHand . 'x' . $tableCards[$i] . '+' . $tableCards[$j];
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Se non ci sono prese, scarta una carta a caso
+        $randomCard = $botHand[array_rand($botHand)];
+        return $randomCard;
+    }
+}
