@@ -3,20 +3,18 @@
 use App\Http\Controllers\GameController;
 use Illuminate\Support\Facades\Route;
 
-// Crea una nuova partita (ritorna l'UUID del game)
-Route::post('/games', [GameController::class, 'create']);
+Route::group(['prefix' => 'games', 'middleware' => 'auth:sanctum'], function () {
+    Route::post('/', [GameController::class, 'create']);
+    Route::post('/{gameId}/join', [GameController::class, 'join']);
+    Route::get('/{gameId}', [GameController::class, 'show']);
+    Route::post('/{gameId}/action', [GameController::class, 'handleAction']);
+});
 
-// Partecipa ad una partita esistente come secondo giocatore
-Route::post('/games/{gameId}/join', [GameController::class, 'join']);
-
-// Recupera lo stato (per riconnessione o caricamento iniziale)
-Route::get('/games/{gameId}', [GameController::class, 'show']);
-
-// Gestisce le azioni (compra, usa, gioca carta)
-Route::post('/games/{gameId}/action', [GameController::class, 'handleAction']);
-
-// Gestisce le azioni del bot
-Route::post('/games/{gameId}/bot-play', [GameController::class, 'botPlay']);
+Route::group(['prefix' => 'auth'],  function () {
+    Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register']);
+    Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login']);
+    Route::middleware('auth:sanctum')->post('/logout', [\App\Http\Controllers\AuthController::class, 'logout']);
+});
 
 Route::fallback(function () {
     return response()->json([
@@ -24,3 +22,4 @@ Route::fallback(function () {
         'message' => 'API route not found',
     ], 404);
 });
+

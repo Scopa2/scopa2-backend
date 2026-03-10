@@ -9,8 +9,8 @@ return new class extends Migration {
     {
         Schema::create('games', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('player_1_id')->nullable();
-            $table->string('player_2_id')->nullable();
+            $table->foreignId('player_1_id')->references('id')->on('users');
+            $table->foreignId('player_2_id')->references('id')->on('users');
             $table->string('seed');
             $table->string('status')->default('waiting');
             $table->timestamps();

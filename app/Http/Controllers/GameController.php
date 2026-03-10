@@ -27,7 +27,7 @@ class GameController extends Controller
     {
         $game = Game::create([
             'id' => (string)Str::uuid(),
-            'player_1_id' => $this->getLoggedPlayerSecret(),
+            'player_1_id' => auth()->id(),
             'player_2_id' => null,
             'seed' => Str::random(16),
             'status' => GameStateEnum::PLAYING,
