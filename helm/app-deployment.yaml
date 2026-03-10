@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scopa2-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: scopa2-app
+  template:
+    metadata:
+      labels:
+        app: scopa2-app
+    spec:
+      containers:
+        - name: scopa2-app
+          image: scopa2:latest
+          imagePullPolicy: Never
+          env:
+            - name: DB_CONNECTION
+              value: "pgsql"
+            # This uses the variables injected by envFrom below
+            - name: DB_HOST
+              value: "$(LOCAL_NODE),$(BACKUPS)"
+            - name: DB_PORT
+              value: "5433"
+            - name: DB_DATABASE
+              value: "yugabyte"
+          # Bulk-inject the regional topology from your ConfigMap
+          envFrom:
+            - configMapRef:
+                name: db-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scopa2-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8000
+  selector:
+    app: scopa2-app

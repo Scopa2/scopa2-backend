@@ -1,0 +1,36 @@
+  services:
+    app:
+      image: scopa2:latest
+      container_name: scopa2-dev
+      user: root
+      volumes:
+        - .:/var/www/html
+      working_dir: /var/www/html
+      environment:
+        # Overriding .env values here
+        - DB_CONNECTION=pgsql
+        - DB_HOST=db
+        - DB_PORT=5432
+        - DB_DATABASE=yugabyte
+        - DB_USERNAME=yugabyte
+        - DB_PASSWORD=password
+        - APP_MAINTENANCE_STORE=file
+      depends_on:
+        - db
+      entrypoint: ["tail", "-f", "/dev/null"]
+
+    db:
+      image: postgres:16-alpine
+      container_name: scopa2-db
+      restart: always
+      environment:
+        - POSTGRES_DB=yugabyte
+        - POSTGRES_USER=yugabyte
+        - POSTGRES_PASSWORD=password
+      ports:
+        - "5433:5432" # Maps to 5433 on your Mac to match your previous config
+      volumes:
+        - db_data:/var/lib/postgresql/data
+
+  volumes:
+    db_data:

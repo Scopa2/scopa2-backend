@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+  namespace: region-eu  # Logic for the EU cluster
+data:
+  LOCAL_NODE: "yb-tserver-0.yb-tservers.db.svc.cluster.local"
+  BACKUPS: "yb-tserver-1.yb-tservers.db.svc.cluster.local,yb-tserver-2.yb-tservers.db.svc.cluster.local"
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+  namespace: region-us  # Logic for the US cluster
+data:
+  LOCAL_NODE: "yb-tserver-2.yb-tservers.db.svc.cluster.local"
+  BACKUPS: "yb-tserver-0.yb-tservers.db.svc.cluster.local,yb-tserver-1.yb-tservers.db.svc.cluster.local"
