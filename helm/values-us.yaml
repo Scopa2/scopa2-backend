@@ -1,6 +1,12 @@
 ingress:
   host: "us.scopa.local"
 
+redis:
+  host: "us-scopa-redis-master.cache-us.svc.cluster.local"
+
+soketi:
+  host: "scopa-us-soketi-service"
+
 db:
   localNode: "yb-tserver-2.yb-tservers.db.svc.cluster.local"
   backups: "yb-tserver-0.yb-tservers.db.svc.cluster.local,yb-tserver-1.yb-tservers.db.svc.cluster.local"

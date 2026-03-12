@@ -1,5 +1,11 @@
 replicaCount: 2
 
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
 image:
   repository: scopa2
   tag: latest
@@ -15,7 +21,28 @@ db:
   port: "5433"
   database: "yugabyte"
 
-# Global Env Vars
+redis:
+  host: "scopa-redis-master"
+  port: "6379"
+  password: ""
+
+soketi:
+  replicaCount: 2
+  host: "scopa-soketi-service"
+  port: "6001"
+  appId: "app-id"
+  appKey: "app-key"
+  appSecret: "app-secret"
+
+# Global Env Vars (overrides .env for K8s distributed deployment)
 env:
   OCTANE_HTTPS: "true"
-  # Add other shared vars here
+  # --- DISTRIBUTED-CRITICAL: Override file-based drivers ---
+  CACHE_STORE: "redis"
+  SESSION_DRIVER: "redis"
+  QUEUE_CONNECTION: "redis"
+  LOG_CHANNEL: "stderr"
+  APP_MAINTENANCE_DRIVER: "cache"
+  # --- APP KEY: Must be shared across all pods ---
+  APP_KEY: "base64:fulavu5hC7LK1C7CDieOVN36wPRGQfKgh1fgyLPIyVM="
+

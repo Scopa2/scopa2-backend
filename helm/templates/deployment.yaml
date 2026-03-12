@@ -33,10 +33,10 @@ spec:
               containerPort: 8000
               protocol: TCP
 
-          # --- PROBES (From your working config) ---
+          # --- PROBES ---
           livenessProbe:
             httpGet:
-              path: / # Change to /up if your app has a health endpoint
+              path: /
               port: http
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -54,6 +54,26 @@ spec:
               value: {{ .Values.db.database | quote }}
             - name: DB_HOST
               value: "{{ .Values.db.localNode }},{{ .Values.db.backups }}"
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: REDIS_PASSWORD
+              value: {{ .Values.redis.password | quote }}
+            - name: BROADCAST_CONNECTION
+              value: "pusher"
+            - name: PUSHER_HOST
+              value: {{ .Values.soketi.host | quote }}
+            - name: PUSHER_PORT
+              value: {{ .Values.soketi.port | quote }}
+            - name: PUSHER_APP_ID
+              value: {{ .Values.soketi.appId | quote }}
+            - name: PUSHER_APP_KEY
+              value: {{ .Values.soketi.appKey | quote }}
+            - name: PUSHER_APP_SECRET
+              value: {{ .Values.soketi.appSecret | quote }}
+            - name: PUSHER_SCHEME
+              value: "http"
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
@@ -66,7 +86,7 @@ spec:
           # --- STORAGE FIX: This stops the 'unable to autosave' error ---
           volumeMounts:
             - name: app-data
-              mountPath: /app/pb_data # Adjust if your app uses a different data folder
+              mountPath: /app/pb_data
             - name: tmp-storage
               mountPath: /tmp
 

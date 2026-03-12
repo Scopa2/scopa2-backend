@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-soketi
+  labels:
+    app: {{ .Release.Name }}-soketi
+spec:
+  replicas: {{ .Values.soketi.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-soketi
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-soketi
+    spec:
+      containers:
+        - name: soketi
+          image: "quay.io/soketi/soketi:latest-16-alpine"
+          ports:
+            - name: ws
+              containerPort: 6001
+              protocol: TCP
+            - name: metrics
+              containerPort: 9601
+              protocol: TCP
+          env:
+            # App credentials (must match Laravel's PUSHER_* env)
+            - name: SOKETI_DEFAULT_APP_ID
+              value: {{ .Values.soketi.appId | quote }}
+            - name: SOKETI_DEFAULT_APP_KEY
+              value: {{ .Values.soketi.appKey | quote }}
+            - name: SOKETI_DEFAULT_APP_SECRET
+              value: {{ .Values.soketi.appSecret | quote }}
+            # Redis adapter for multi-pod fan-out
+            - name: SOKETI_ADAPTER_DRIVER
+              value: "redis"
+            - name: SOKETI_ADAPTER_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: SOKETI_ADAPTER_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: SOKETI_DEBUG
+              value: "1"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: ws
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ws
+            initialDelaySeconds: 3
+            periodSeconds: 5

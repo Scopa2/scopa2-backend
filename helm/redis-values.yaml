@@ -1,0 +1,36 @@
+# redis-values.yaml
+# Deploy with: helm install <region>-scopa-redis bitnami/redis -n cache-<region> -f redis-values.yaml
+
+architecture: replication   # Master + Replicas (no cluster mode)
+
+auth:
+  enabled: false            # For local dev; enable + set password for production
+
+replica:
+  replicaCount: 2           # 1 Master + 2 Replicas = 3 nodes per region
+
+sentinel:
+  enabled: true             # Auto-failover: if Master dies, a Replica promotes
+  quorum: 2
+
+master:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  persistence:
+    size: 1Gi
+
+replica:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  persistence:
+    size: 1Gi
