@@ -2,7 +2,10 @@ ingress:
   host: "eu.scopa.local"
 
 redis:
-  host: "eu-scopa-redis-master.cache-eu.svc.cluster.local"
+  host: "eu-scopa-redis.cache-eu.svc.cluster.local"
+
+env:
+  REDIS_SENTINEL_HOST: "eu-scopa-redis.cache-eu.svc.cluster.local"
 
 soketi:
   host: "scopa-eu-soketi-service"

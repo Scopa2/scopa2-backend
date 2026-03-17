@@ -16,11 +16,13 @@ class GameStateUpdated implements ShouldBroadcastNow
 
     private $viewerId;
     public $state;
+    private $gameId;
 
-    public function __construct($state, string $viewerId)
+    public function __construct($gameId, $state, string $viewerId)
     {
         $this->viewerId = $viewerId;
         $this->state = $state;
+        $this->gameId = $gameId;
     }
 
     public function broadcastAs(): string
@@ -31,10 +33,7 @@ class GameStateUpdated implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel($this->viewerId.'_games'),
+            new PrivateChannel('game.' . $this->gameId),
         ];
-//        return [
-//            new Channel('game.' . $this->gameId),
-//        ];
     }
 }

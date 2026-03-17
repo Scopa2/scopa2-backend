@@ -22,7 +22,7 @@ db:
   database: "yugabyte"
 
 redis:
-  host: "scopa-redis-master"
+  host: "scopa-redis"
   port: "6379"
   password: ""
 
@@ -37,12 +37,17 @@ soketi:
 # Global Env Vars (overrides .env for K8s distributed deployment)
 env:
   OCTANE_HTTPS: "true"
-  # --- DISTRIBUTED-CRITICAL: Override file-based drivers ---
+  DB_CONNECTION: "pgsql"
+  REDIS_CLIENT: "phpredis-sentinel"
   CACHE_STORE: "redis"
+  CACHE_DRIVER: "redis"
   SESSION_DRIVER: "redis"
   QUEUE_CONNECTION: "redis"
   LOG_CHANNEL: "stderr"
   APP_MAINTENANCE_DRIVER: "cache"
+  APP_MAINTENANCE_STORE: "redis"
+  REDIS_SENTINEL_SERVICE: "mymaster"
+  REDIS_SENTINEL_PORT: "26379"
   # --- APP KEY: Must be shared across all pods ---
   APP_KEY: "base64:fulavu5hC7LK1C7CDieOVN36wPRGQfKgh1fgyLPIyVM="
 

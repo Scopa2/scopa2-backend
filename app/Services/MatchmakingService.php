@@ -44,7 +44,7 @@ class MatchmakingService
      */
     public function isQueued(User $user): bool
     {
-        return Redis::zscore(self::QUEUE_KEY, (string) $user->id) !== null;
+        return Redis::zscore(self::QUEUE_KEY, (string) $user->id) !== false;
     }
 
     /**
