@@ -13,6 +13,9 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}-soketi
+      # Recommended: keep this so the pods restart on every helm upgrade while debugging
+      annotations:
+        rollout/restartedAt: {{ now | quote }}
     spec:
       containers:
         - name: soketi
@@ -25,22 +28,50 @@ spec:
               containerPort: 9601
               protocol: TCP
           env:
-            # App credentials (must match Laravel's PUSHER_* env)
+            # App credentials
             - name: SOKETI_DEFAULT_APP_ID
               value: {{ .Values.soketi.appId | quote }}
             - name: SOKETI_DEFAULT_APP_KEY
               value: {{ .Values.soketi.appKey | quote }}
             - name: SOKETI_DEFAULT_APP_SECRET
               value: {{ .Values.soketi.appSecret | quote }}
-            # Redis adapter for multi-pod fan-out
+
+            # --- 1. Adapter (Crucial for service replication/scaling) ---
             - name: SOKETI_ADAPTER_DRIVER
               value: "redis"
-            - name: SOKETI_ADAPTER_REDIS_HOST
-              value: {{ .Values.redis.host | quote }}
-            - name: SOKETI_ADAPTER_REDIS_PORT
-              value: {{ .Values.redis.port | quote }}
+            - name: SOKETI_ADAPTER_REDIS_SENTINELS
+              value: {{ printf "[{\"host\": \"%s\", \"port\": %s}]" .Values.env.REDIS_SENTINEL_HOST (.Values.env.REDIS_SENTINEL_PORT | toString) | quote }}
+            - name: SOKETI_ADAPTER_REDIS_INSTANCE_NAME
+              value: {{ .Values.env.REDIS_SENTINEL_SERVICE | quote }}
+            - name: SOKETI_ADAPTER_REDIS_PASSWORD
+              value: {{ .Values.redis.password | quote }}
+
+            # --- 2. Database (Crucial for Presence & Consistency) ---
+            - name: SOKETI_DB_DRIVER
+              value: "redis"
+            - name: SOKETI_DB_REDIS_SENTINELS
+              value: {{ printf "[{\"host\": \"%s\", \"port\": %s}]" .Values.env.REDIS_SENTINEL_HOST (.Values.env.REDIS_SENTINEL_PORT | toString) | quote }}
+            - name: SOKETI_DB_REDIS_INSTANCE_NAME
+              value: {{ .Values.env.REDIS_SENTINEL_SERVICE | quote }}
+            - name: SOKETI_DB_REDIS_PASSWORD
+              value: {{ .Values.redis.password | quote }}
+
+            # Optional: If Sentinels themselves are password protected
+            # - name: SOKETI_ADAPTER_REDIS_SENTINEL_PASSWORD
+            #   value: {{ .Values.redis.sentinelPassword | quote }}
+            # - name: SOKETI_DB_REDIS_SENTINEL_PASSWORD
+            #   value: {{ .Values.redis.sentinelPassword | quote }}
+
             - name: SOKETI_DEBUG
               value: "1"
+
+            # Pass generic env vars if they match SOKETI_*
+            {{- range $key, $value := .Values.env }}
+            {{- if hasPrefix "SOKETI_" $key }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
           resources:
             requests:
               cpu: "100m"
@@ -60,3 +91,4 @@ spec:
               port: ws
             initialDelaySeconds: 3
             periodSeconds: 5
+

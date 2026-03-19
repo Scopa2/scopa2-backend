@@ -33,6 +33,7 @@ soketi:
   appId: "app-id"
   appKey: "app-key"
   appSecret: "app-secret"
+  adapter: "redis"
 
 # Global Env Vars (overrides .env for K8s distributed deployment)
 env:
