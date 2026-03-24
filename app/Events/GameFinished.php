@@ -15,14 +15,12 @@ class GameFinished implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $results;
-    private $p1Id;
-    private $p2Id;
+    private $gameId;
 
-    public function __construct($results, string $p1Id, string $p2Id)
+    public function __construct($results, string $gameId)
     {
         $this->results = $results;
-        $this->p1Id = $p1Id;
-        $this->p2Id = $p2Id;
+        $this->gameId = $gameId;
     }
 
     public function broadcastAs(): string
@@ -33,8 +31,7 @@ class GameFinished implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new Channel($this->p1Id.'_games'),
-            new Channel($this->p2Id.'_games'),
+            new PrivateChannel('game_' . $this->gameId),
         ];
     }
 }

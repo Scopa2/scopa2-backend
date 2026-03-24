@@ -18,5 +18,5 @@ helm upgrade --install scopa2-us ./helm \
   -f helm/values-us.yaml \
   -n region-us --create-namespace
 
-# Run migrations
-kubectl exec -n region-eu -it $(kubectl get pods -n region-eu -l app=scopa2-eu -o jsonpath="{.items[0].metadata.name}") -- php artisan migrate --force
+## Run migrations
+#kubectl exec -n region-eu -it $(kubectl get pods -n region-eu -l app=scopa2-eu -o jsonpath="{.items[0].metadata.name}") -- php artisan migrate --force
