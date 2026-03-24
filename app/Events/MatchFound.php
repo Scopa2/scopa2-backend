@@ -11,7 +11,7 @@ use Illuminate\Queue\SerializesModels;
 
 class MatchFound implements ShouldBroadcastNow
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, SerializesModels;
 
     private string $player1Id;
 
@@ -19,9 +19,9 @@ class MatchFound implements ShouldBroadcastNow
 
     public string $gameId;
 
-    public function __construct(public string $game_id, string $player1Id, string $player2Id)
+    public function __construct(string $gameId, string $player1Id, string $player2Id)
     {
-        $this->gameId = $game_id;
+        $this->gameId = $gameId;
         $this->player1Id = $player1Id;
         $this->player2Id = $player2Id;
     }
@@ -37,8 +37,8 @@ class MatchFound implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel($this->player1Id.'_games'),
-            new PrivateChannel($this->player2Id.'_games'),
+            new PrivateChannel($this->player1Id.'_matchmaking_result'),
+            new PrivateChannel($this->player2Id.'_matchmaking_result')
         ];
     }
 
