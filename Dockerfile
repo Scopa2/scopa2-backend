@@ -1,7 +1,7 @@
 # Stage 1: Build stage
 FROM dunglas/frankenphp:1.11.2-php8.3 AS builder
 
-# --- FIX: Ensure the extension installer is present ---
+# Ensure the extension installer is present
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 RUN chmod +x /usr/local/bin/install-php-extensions
 
@@ -9,13 +9,16 @@ RUN chmod +x /usr/local/bin/install-php-extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git unzip && rm -rf /var/lib/apt/lists/*
 
-# Install extensions (including opentelemetry)
-RUN install-php-extensions zip intl bcmath exif opentelemetry
+# FIX: Added 'redis' and common Laravel extensions here so Composer doesn't complain
+RUN install-php-extensions zip intl bcmath exif opentelemetry redis pdo_pgsql pdo_mysql
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
+# Copy manifest files first for layer caching
 COPY composer.json composer.lock ./
+
+# Composer now sees the 'redis' extension and will proceed
 RUN composer install --no-scripts --no-autoloader --prefer-dist
 
 COPY . .
@@ -24,10 +27,9 @@ RUN composer dump-autoload --optimize --no-scripts
 # Stage 2: Production stage
 FROM dunglas/frankenphp:1.11.2-php8.3 AS production
 
-# --- FIX: Ensure the extension installer is present here too ---
+# Ensure the extension installer is present here too
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 RUN chmod +x /usr/local/bin/install-php-extensions
-
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor curl && rm -rf /var/lib/apt/lists/*
@@ -40,6 +42,7 @@ RUN groupadd -g 1000 appgroup && useradd -u 1000 -g appgroup -m appuser
 
 WORKDIR /var/www/html
 
+# Copy from builder
 COPY --from=builder --chown=appuser:appgroup /var/www/html /var/www/html
 COPY --chown=appuser:appgroup ./.docker/php.ini /usr/local/etc/php/php.ini
 COPY ./.docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

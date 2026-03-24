@@ -144,7 +144,7 @@ return [
 
     'redis' => [
 
-        'client' => env('REDIS_CLIENT', 'phpredis'),
+        'client' => env('REDIS_CLIENT', 'phpredis-sentinel'),
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
@@ -153,12 +153,11 @@ return [
         ],
 
         'default' => [
-            'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
+            'sentinel_host' => env('REDIS_SENTINEL_HOST', '127.0.0.1'),
+            'sentinel_port' => (int) env('REDIS_SENTINEL_PORT', 26379),
+            'sentinel_service' => env('REDIS_SENTINEL_SERVICE', 'mymaster'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_DB', '0'),
+            'database' => (int) env('REDIS_DB', '0'),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
@@ -166,12 +165,11 @@ return [
         ],
 
         'cache' => [
-            'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
+            'sentinel_host' => env('REDIS_SENTINEL_HOST', '127.0.0.1'),
+            'sentinel_port' => (int) env('REDIS_SENTINEL_PORT', 26379),
+            'sentinel_service' => env('REDIS_SENTINEL_SERVICE', 'mymaster'),
             'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_CACHE_DB', '1'),
+            'database' => (int) env('REDIS_CACHE_DB', '1'),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
