@@ -46,7 +46,7 @@ class ScoreCalculator
         ];
 
         // 1. Punti per le Scope
-        foreach ($state->players as $playerKey => $player) {
+        foreach ($state->players->toArray() as $playerKey => $player) {
             $scopaCount = $player['scope'] ?? 0;
             if ($scopaCount > 0) {
                 $scores[$playerKey]['total'] += $scopaCount;
@@ -55,7 +55,7 @@ class ScoreCalculator
         }
 
         // 2. Punti per i 7 di Denari (Settebello)
-        foreach ($state->players as $playerKey => $player) {
+        foreach ($state->players->toArray() as $playerKey => $player) {
             $settebelloCount = self::countSettebello($state->getEffectivePlayerCapturedCards($playerKey));
             if ($settebelloCount > 0) {
                 $scores[$playerKey]['total'] += $settebelloCount;

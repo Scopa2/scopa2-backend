@@ -18,7 +18,7 @@ class GameConstants
     // Placeholder per carte coperte (usato nelle proiezioni pubbliche)
     const CARD_BACK = 'X';
 
-    const GAME_WIN_SCORE = 10;
+    const GAME_WIN_SCORE = 1;
 
     const SANTO_SHOP_EXPIRY = 3; // Durata in turni dei santi acquistati
 
