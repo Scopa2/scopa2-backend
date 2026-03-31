@@ -12,23 +12,41 @@ enableLoadBalancer: true # Tells Minikube to assign an External-IP.
                          # This is what 'minikube tunnel' connects to so you can 
                          # access the DB from your Mac (e.g., for Laravel migrations).
 
+# --- STABILITY (Minikube I/O Fixes) ---
+# Global probe settings for all pods (Master and TServer).
+# Increased timeouts because 'sync' in liveness probes can block on slow laptop disks
+# during heavy migrations, causing pod restarts and 'no connection' errors.
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 15
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 15
+  failureThreshold: 3
+
 # --- RESOURCE MANAGEMENT (The 'Perfect Fit' Math) ---
 resource:
   master:
     requests:
-      cpu: "100m"      # Reserved CPU (0.1 cores). Guaranteed to the Master pods.
-      memory: "256Mi"  # Reserved RAM. Low because Masters only handle metadata.
+      cpu: "150m"      # Reserved CPU (0.15 cores).
+      memory: "512Mi"  # Reserved RAM.
     limits:
-      cpu: "200m"      # Maximum CPU burst allowed if the node is busy.
-      memory: "512Mi"  # Hard ceiling for RAM to prevent crashing the whole Mac.
+      cpu: "300m"      # Maximum CPU burst.
+      memory: "1024Mi" # Hard ceiling.
       
   tserver:
     requests:
-      cpu: "200m"      # Workers do more heavy lifting (SQL processing).
-      memory: "512Mi"  # Guaranteed RAM for data operations.
+      cpu: "300m"      # Workers do more heavy lifting (SQL processing).
+      memory: "1024Mi" # Guaranteed RAM.
     limits:
-      cpu: "500m"      # Allows doubling CPU speed during heavy matchmaking.
-      memory: "1024Mi" # Allows up to 1GB RAM burst per node.
+      cpu: "1000m"     # Allows 1 full core burst during heavy migrations.
+      memory: "2048Mi" # Allows up to 2GB RAM burst per node.
 
 # --- VIRTUAL GEO-PLACEMENT (The "30 e Lode" Magic) ---
 tserver:

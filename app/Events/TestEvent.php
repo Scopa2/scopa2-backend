@@ -10,28 +10,26 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class GameFinished implements ShouldBroadcastNow
+class TestEvent implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $results;
-    private $gameId;
+    public $test;
 
-    public function __construct($results, string $gameId)
+    public function __construct()
     {
-        $this->results = $results;
-        $this->gameId = $gameId;
+        $this->test = "MAIZ";
     }
 
     public function broadcastAs(): string
     {
-        return 'game_finished';
+        return 'test';
     }
 
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('game_' . $this->gameId),
+            new Channel("test_channel")
         ];
     }
 }

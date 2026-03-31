@@ -23,3 +23,6 @@ Thumbs.db
 **/caddy
 frankenphp
 frankenphp-worker.php
+docker/compose/redis_data/*
+
+docker/compose/redis_data/

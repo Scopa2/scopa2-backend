@@ -50,7 +50,7 @@ class GameController extends Controller
             ], 422);
         }
 
-        $game->player_2_id = $this->getLoggedPlayerSecret();
+        $game->player_2_id = auth()->id();
         $game->save();
 
         return response()->json([
@@ -115,13 +115,13 @@ class GameController extends Controller
 
             // On round ended callback
             function ($results) use ($game) {
-                broadcast(new RoundFinished($results, $game->player_1_id, $game->player_2_id));
+                broadcast(new RoundFinished($results, $game->id));
                 sleep(5);
             },
 
             // On game ended callback
             function ($results) use ($game) {
-                broadcast(new GameFinished($results, $game->player_1_id, $game->player_2_id));
+                broadcast(new GameFinished($results, $game->id));
             }
         );
 
@@ -138,8 +138,8 @@ class GameController extends Controller
             $game->save();
         } else {
             // Invio WebSocket del nuovo stato
-            broadcast(new GameStateUpdated($engine->getState()->toPublicView('p1'), $game->player_1_id));
-            broadcast(new GameStateUpdated($engine->getState()->toPublicView('p2'), $game->player_2_id));
+            broadcast(new GameStateUpdated($game->id, $engine->getState()->toPublicView('p1'), $game->player_1_id));
+            broadcast(new GameStateUpdated($game->id, $engine->getState()->toPublicView('p2'), $game->player_2_id));
         }
 
         // 5. Persistenza dell'evento
