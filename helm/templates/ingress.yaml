@@ -3,25 +3,34 @@ kind: Ingress
 metadata:
   name: {{ .Release.Name }}-ingress
   annotations:
-    # Performance tweaks
+    # 1. Standard Performance Tweaks
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-    # WebSocket support (required for Laravel broadcasting / Soketi)
+    # 2. WebSocket Support
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 
-    # WebSocket rewrite rule: Strip /ws prefix for the backend (Soketi expects /app)
+    # 3. Force Nginx to pass the Upgrade headers (Crucial for 101 status)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 4. Routing & Rewrites
+    # This regex ensures /ws/app/key becomes /app/key for Soketi
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 
-    # Disable SSL redirect for local Minikube development
+    # 5. Disable SSL redirect (Caddy handles SSL, K3s stays on 80)
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
 spec:
   ingressClassName: nginx
   rules:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          # Main Laravel App
           - path: /()(.*)
             pathType: ImplementationSpecific
             backend:
@@ -29,6 +38,7 @@ spec:
                 name: {{ .Release.Name }}-service
                 port:
                   number: 80
+          # WebSocket / Soketi
           - path: /ws(/|$)(.*)
             pathType: ImplementationSpecific
             backend:

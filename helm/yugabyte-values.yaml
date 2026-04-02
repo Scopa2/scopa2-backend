@@ -2,14 +2,14 @@
 
 # --- GLOBAL TOPOLOGY ---
 replicas:
-  master: 3   # The 'Brain' nodes. 3 is required for Raft consensus (Quorum). 
+  master: 3   # The 'Brain' nodes. 3 is required for Raft consensus (Quorum).
               # If 1 node dies, the remaining 2 can still elect a leader.
   tserver: 3  # The 'Worker' nodes. These store the data and handle SQL queries.
               # In your simulation, these will act as EU, US, and Backup nodes.
 
 # --- NETWORKING ---
-enableLoadBalancer: true # Tells Minikube to assign an External-IP. 
-                         # This is what 'minikube tunnel' connects to so you can 
+enableLoadBalancer: true # Tells Minikube to assign an External-IP.
+                         # This is what 'minikube tunnel' connects to so you can
                          # access the DB from your Mac (e.g., for Laravel migrations).
 
 # --- STABILITY (Minikube I/O Fixes) ---
@@ -34,24 +34,23 @@ readinessProbe:
 resource:
   master:
     requests:
-      cpu: "150m"      # Reserved CPU (0.15 cores).
-      memory: "512Mi"  # Reserved RAM.
+      cpu: "100m"
+      memory: "256Mi"
     limits:
-      cpu: "300m"      # Maximum CPU burst.
-      memory: "1024Mi" # Hard ceiling.
-      
+      cpu: "300m"
+      memory: "1024Mi"
   tserver:
     requests:
-      cpu: "300m"      # Workers do more heavy lifting (SQL processing).
-      memory: "1024Mi" # Guaranteed RAM.
+      cpu: "150m"      # was 300m — halved
+      memory: "512Mi"  # was 1024Mi
     limits:
-      cpu: "1000m"     # Allows 1 full core burst during heavy migrations.
-      memory: "2048Mi" # Allows up to 2GB RAM burst per node.
+      cpu: "1000m"     # keep burst high
+      memory: "2048Mi"
 
 # --- VIRTUAL GEO-PLACEMENT (The "30 e Lode" Magic) ---
 tserver:
   extraEnv:
-    # Uses the Kubernetes Downward API to inject the pod's unique name 
+    # Uses the Kubernetes Downward API to inject the pod's unique name
     # (yb-tserver-0, yb-tserver-1, etc.) into the container's environment.
     - name: MY_POD_NAME
       valueFrom:
@@ -74,5 +73,5 @@ storage:
     size: 5Gi   # Space for your actual 'games' table and card data.
 
 # --- OPTIMIZATION ---
-enablePrometheus: false # Disables the built-in monitoring stack. 
+enablePrometheus: false # Disables the built-in monitoring stack.
                         # Great for saving ~1GB of RAM on your laptop.
