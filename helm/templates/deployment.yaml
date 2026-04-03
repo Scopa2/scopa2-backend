@@ -22,6 +22,10 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
       securityContext:
         fsGroup: 2000
       containers:

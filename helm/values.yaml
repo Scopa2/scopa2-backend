@@ -6,10 +6,22 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
 
+resources:
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
 image:
-  repository: scopa2
+  repository: ghcr.io/scopa2/scopa2-backend
   tag: latest
-  pullPolicy: Never
+  pullPolicy: Always
+
+# Uncomment if your repository is private
+# imagePullSecrets:
+#   - name: ghcr-secret
 
 service:
   type: ClusterIP
