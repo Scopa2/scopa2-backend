@@ -10,26 +10,23 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class TestEvent implements ShouldBroadcastNow
+class HeartBeat implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $test;
-
     public function __construct()
     {
-        $this->test = "MAIZ";
     }
 
     public function broadcastAs(): string
     {
-        return 'test';
+        return 'heartbeat';
     }
 
     public function broadcastOn(): array
     {
         return [
-            new Channel("test_channel")
+            new Channel("heartbeat"),
         ];
     }
 }
