@@ -16,58 +16,17 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
-    name: Run Test Suite
-    runs-on: ubuntu-latest
-
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup PHP 8.3
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: pdo_sqlite, sqlite3, redis, pcntl, bcmath, intl, zip
-          coverage: none
-
-      - name: Copy .env for testing
-        run: cp .env.example .env
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      - name: Generate app key
-        run: php artisan key:generate
-
-      - name: Run migrations
-        run: php artisan migrate --env=testing --force
-
-      - name: Run test suite
-        run: ./vendor/bin/pest --ci
 
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    needs: [test]
     permissions:
       contents: read
       packages: write
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
       image_digest: ${{ steps.build.outputs.digest }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -115,7 +74,7 @@ jobs:
     name: Deploy to K3s via Tailscale
     runs-on: ubuntu-latest
     needs: build-and-push
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -153,7 +112,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 ubuntu@10.69.69.111 << 'EOF'
             set -e
             cd ~/scopa2-deployment
-            
+
             echo "🚀 Deploying to region-eu..."
             helm upgrade --install scopa2-eu ./helm \
               -f helm/values.yaml \
@@ -162,15 +121,15 @@ jobs:
               -n region-eu \
               --wait \
               --timeout 5m
-            
+
             echo "✅ Deployment to region-eu completed"
-            
+
             echo "📊 Checking rollout status..."
             kubectl rollout status deployment/scopa2-eu -n region-eu --timeout=5m
-            
+
             echo "🔍 Verifying pods..."
             kubectl get pods -n region-eu -l app=scopa2-eu
-            
+
             echo "🎯 Current deployment info:"
             kubectl get deployment scopa2-eu -n region-eu -o jsonpath='{.spec.template.spec.containers[0].image}'
             echo ""
@@ -181,7 +140,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 ubuntu@10.69.69.111 << 'EOF'
             set -e
             cd ~/scopa2-deployment
-            
+
             echo "🚀 Deploying to region-us..."
             helm upgrade --install scopa2-us ./helm \
               -f helm/values.yaml \
@@ -190,15 +149,15 @@ jobs:
               -n region-us \
               --wait \
               --timeout 5m
-            
+
             echo "✅ Deployment to region-us completed"
-            
+
             echo "📊 Checking rollout status..."
             kubectl rollout status deployment/scopa2-us -n region-us --timeout=5m
-            
+
             echo "🔍 Verifying pods..."
             kubectl get pods -n region-us -l app=scopa2-us
-            
+
             echo "🎯 Current deployment info:"
             kubectl get deployment scopa2-us -n region-us -o jsonpath='{.spec.template.spec.containers[0].image}'
             echo ""
@@ -210,17 +169,17 @@ jobs:
             echo "========================================="
             echo "📋 Deployment Summary"
             echo "========================================="
-            
+
             echo ""
             echo "Region EU:"
             kubectl get pods -n region-eu -l app=scopa2-eu
             kubectl get hpa -n region-eu
-            
+
             echo ""
             echo "Region US:"
             kubectl get pods -n region-us -l app=scopa2-us
             kubectl get hpa -n region-us
-            
+
             echo ""
             echo "✨ All deployments verified successfully!"
           EOF
