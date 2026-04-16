@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('games', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignId('player_1_id')->references('id')->on('users');
-            $table->foreignId('player_2_id')->references('id')->on('users');
+            $table->foreignId('player_2_id')->nullable()->references('id')->on('users');
             $table->string('seed');
             $table->string('status')->default('waiting');
             $table->timestamps();
