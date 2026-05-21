@@ -79,28 +79,10 @@ class MoveValidator
         }
 
         if (empty($targets)) {
-            // Discard. Scopa flag must be false (no capture, table never empties via discard).
-            if ($isScopa) {
-                $this->errors[] = "Cannot mark scopa on a discard.";
-                return false;
-            }
             return true;
         }
 
-        if (!$this->validateCapture($card, $targets)) {
-            return false;
-        }
-
-        // Scopa flag = true iff capturing exactly the whole table.
-        $tableEmptiedAfterCapture = (count($targets) === count($this->state->table));
-        if ($isScopa !== $tableEmptiedAfterCapture) {
-            $this->errors[] = $isScopa
-                ? "Scopa flag set but capture does not empty the table."
-                : "Capture empties the table — scopa flag (#) required.";
-            return false;
-        }
-
-        return true;
+        return $this->validateCapture($card, $targets);
     }
 
     private function validateCapture(string $playedCard, array $capturedCards): bool

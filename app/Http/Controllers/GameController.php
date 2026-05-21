@@ -7,6 +7,7 @@ use App\Events\GameFinished;
 use App\Events\GameStateUpdated;
 use App\Events\RoundFinished;
 use App\GameEngine\ScopaEngine;
+use App\GameEngine\ScopaNotationParser;
 use App\GameEngine\Validators\MoveValidator;
 use App\Http\Requests\CreateGameRequest;
 use App\Http\Requests\GameActionRequest;
@@ -138,15 +139,6 @@ class GameController extends Controller
 
         $playerIndex = $this->getLoggedPlayerIndex($game);
 
-        error_log(sprintf("DBG auth=%s p1=%s p2=%s pi=%s turn=%s action=%s",
-            var_export(auth()->id(), true),
-            var_export($game->player_1_id, true),
-            var_export($game->player_2_id, true),
-            var_export($playerIndex, true),
-            $engine->getState()->currentTurnPlayer,
-            $action
-        ));
-
         // 4. Validazione mossa (regole Scopa) prima dell'applicazione
         $validator = MoveValidator::fromState($engine->getState(), $playerIndex);
         if (!$validator->validate($action)) {
@@ -157,7 +149,10 @@ class GameController extends Controller
             ], 422);
         }
 
-        // 5. Esecuzione mossa
+        // 5. Normalizza il flag scopa (#) — il client non deve sapere se è scopa.
+        $action = $this->normalizeScopaFlag($action, $engine->getState());
+
+        // 6. Esecuzione mossa
         $engine->applyAction($playerIndex, $action);
 
 
@@ -197,5 +192,17 @@ class GameController extends Controller
         ]);
     }
 
-
+    private function normalizeScopaFlag(string $action, \App\GameEngine\GameState $stateBefore): string
+    {
+        $parsed = ScopaNotationParser::parse($action);
+        if ($parsed['type'] !== \App\GameEngine\GameConstants::TYPE_CARD_PLAY) {
+            return $action;
+        }
+        if (empty($parsed['targets'])) {
+            return rtrim($action, '#');
+        }
+        $isScopa = (count($parsed['targets']) === count($stateBefore->table));
+        $base = rtrim($action, '#');
+        return $isScopa ? $base . '#' : $base;
+    }
 }

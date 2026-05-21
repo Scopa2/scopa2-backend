@@ -134,42 +134,16 @@ test('getFirstError returns string when error exists', function () {
     expect($validator->getFirstError())->toBeString();
 });
 
-test('scopa flag required when capture empties table', function () {
-    // Forge state: single table card + hand card with matching value.
+test('scopa flag accepted (server-side normalizes)', function () {
+    // Validator no longer enforces flag — controller normalizes before persist.
     $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
     $state->table = ['7D'];
     $state->players->p1->hand = ['7C', '3B', '2S'];
     $state->currentTurnPlayer = 'p1';
 
     $validator = MoveValidator::fromState($state, 'p1');
-
-    // Without # — should reject.
-    expect($validator->validate('7Cx7D'))->toBeFalse()
-        ->and($validator->getFirstError())->toContain('scopa');
-
-    // With # — should accept.
+    expect($validator->validate('7Cx7D'))->toBeTrue();
     expect($validator->validate('7Cx7D#'))->toBeTrue();
-});
-
-test('scopa flag rejected when table not emptied', function () {
-    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
-    $state->table = ['7D', '3S'];
-    $state->players->p1->hand = ['7C', '4B', '2S'];
-    $state->currentTurnPlayer = 'p1';
-
-    $validator = MoveValidator::fromState($state, 'p1');
-    expect($validator->validate('7Cx7D#'))->toBeFalse()
-        ->and($validator->getFirstError())->toContain('does not empty');
-});
-
-test('scopa flag rejected on discard', function () {
-    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
-    $state->table = [];
-    $state->players->p1->hand = ['7C', '4B', '2S'];
-    $state->currentTurnPlayer = 'p1';
-
-    $validator = MoveValidator::fromState($state, 'p1');
-    expect($validator->validate('7C#'))->toBeFalse();
 });
 
 test('exact match wins over sum capture', function () {

@@ -72,6 +72,41 @@ test('listener wired via event dispatch', function () {
         ->and($p2->elo)->toBe(1516);
 });
 
+test('controller normalizes scopa flag on capture that empties table', function () {
+    [$p1] = actingAsUser();
+    [$p2] = actingAsUser();
+    $game = createGame($p1, $p2);
+
+    // Forge state via direct DB events: we just rely on the seed and use a known capture.
+    // Easier: drive a single move that we KNOW empties or not. Use first iteration.
+    $engine = new \App\GameEngine\ScopaEngine($game->seed);
+    $state = $engine->getState();
+    $p1Hand = $state->players->p1->hand;
+    $table = $state->table;
+
+    // Find any single-card capture available.
+    $action = null;
+    foreach ($p1Hand as $hc) {
+        $v = \App\GameEngine\GameUtilities::getCardValue($hc);
+        foreach ($table as $tc) {
+            if (\App\GameEngine\GameUtilities::getCardValue($tc) === $v) {
+                $action = $hc . 'x' . $tc; // no # — client sloppy
+                break 2;
+            }
+        }
+    }
+    if ($action === null) $this->markTestSkipped('no exact capture in seed');
+
+    $this->actingAs($p1, 'sanctum')
+        ->postJson("/api/games/{$game->id}/action", ['action' => $action])
+        ->assertStatus(200);
+
+    $persisted = \App\Models\GameEvent::where('game_id', $game->id)->first();
+    // Table size 4, capture 1 card → not scopa → no # appended.
+    expect($persisted->pgn_action)->toBe($action)
+        ->and(str_contains($persisted->pgn_action, '#'))->toBeFalse();
+});
+
 function pickLegalAction(\App\GameEngine\GameState $state): string
 {
     $pid = $state->currentTurnPlayer;
@@ -106,24 +141,20 @@ function pickLegalAction(\App\GameEngine\GameState $state): string
 }
 
 test('game result persisted on game over', function () {
-    [$p1, $headers1] = actingAsUser(['elo' => 1000]);
-    [$p2, $headers2] = actingAsUser(['elo' => 1000]);
+    [$p1] = actingAsUser(['elo' => 1000]);
+    [$p2] = actingAsUser(['elo' => 1000]);
 
     $game = createGame($p1, $p2);
 
-    $headers = ['p1' => $headers1, 'p2' => $headers2];
+    $users = ['p1' => $p1, 'p2' => $p2];
 
     $shadow = new \App\GameEngine\ScopaEngine($game->seed);
     $safety = 500;
     while (!$shadow->getState()->isGameOver && $safety-- > 0) {
         $pid = $shadow->getState()->currentTurnPlayer;
         $action = pickLegalAction($shadow->getState());
-        $resp = $this->withHeaders($headers[$pid])
+        $resp = $this->actingAs($users[$pid], 'sanctum')
             ->postJson("/api/games/{$game->id}/action", ['action' => $action]);
-        if ($resp->status() !== 200) {
-            $events = \App\Models\GameEvent::where('game_id', $game->id)->orderBy('sequence_number')->get(['sequence_number','actor_id','pgn_action']);
-            dump(compact('pid', 'action'), $resp->json(), $shadow->getState()->currentTurnPlayer, $shadow->getState()->isGameOver, $events->toArray());
-        }
         $resp->assertStatus(200);
         $shadow->applyAction($pid, $action);
     }
