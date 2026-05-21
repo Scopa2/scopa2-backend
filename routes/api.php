@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\MatchmakingController;
+use App\Http\Controllers\MeController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['prefix' => 'games', 'middleware' => 'auth:sanctum'], function () {
@@ -9,6 +10,10 @@ Route::group(['prefix' => 'games', 'middleware' => 'auth:sanctum'], function () 
     Route::post('/{gameId}/join', [GameController::class, 'join']);
     Route::get('/{gameId}', [GameController::class, 'show']);
     Route::post('/{gameId}/action', [GameController::class, 'handleAction']);
+});
+
+Route::group(['prefix' => 'me', 'middleware' => 'auth:sanctum'], function () {
+    Route::get('/active-games', [MeController::class, 'activeGames']);
 });
 
 Route::group(['prefix' => 'matchmaking', 'middleware' => 'auth:sanctum'], function () {

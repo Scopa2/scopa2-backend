@@ -7,6 +7,8 @@ use App\Events\GameFinished;
 use App\Events\GameStateUpdated;
 use App\Events\RoundFinished;
 use App\GameEngine\ScopaEngine;
+use App\GameEngine\ScopaNotationParser;
+use App\GameEngine\Validators\MoveValidator;
 use App\Http\Requests\CreateGameRequest;
 use App\Http\Requests\GameActionRequest;
 use App\Models\Game;
@@ -30,7 +32,7 @@ class GameController extends Controller
             'player_1_id' => auth()->id(),
             'player_2_id' => null,
             'seed' => Str::random(16),
-            'status' => GameStateEnum::PLAYING,
+            'status' => GameStateEnum::WAITING_FOR_PLAYERS,
         ]);
 
         return response()->json([
@@ -51,6 +53,7 @@ class GameController extends Controller
         }
 
         $game->player_2_id = auth()->id();
+        $game->status = GameStateEnum::PLAYING;
         $game->save();
 
         return response()->json([
@@ -66,6 +69,13 @@ class GameController extends Controller
     public function show($gameId, Request $request)
     {
         $game = Game::findOrFail($gameId);
+
+        try {
+            $playerIndex = $this->getLoggedPlayerIndex($game);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => 'Not your game.'], 403);
+        }
+
         $events = GameEvent::where('game_id', $gameId)->orderBy('sequence_number')->get();
 
         $engine = new ScopaEngine($game->seed);
@@ -73,7 +83,7 @@ class GameController extends Controller
 
         return response()->json([
             'gameStatus' => $game->status,
-            'state' => $state->toPublicView($this->getLoggedPlayerIndex($game))
+            'state' => $state->toPublicView($playerIndex),
         ]);
     }
 
@@ -127,14 +137,39 @@ class GameController extends Controller
 
         $engine->replay($events->all());
 
+        $playerIndex = $this->getLoggedPlayerIndex($game);
 
-        // 4. Validazione logica ed esecuzione
-        $engine->applyAction($this->getLoggedPlayerIndex($game), $action);
+        // 4. Validazione mossa (regole Scopa) prima dell'applicazione
+        $validator = MoveValidator::fromState($engine->getState(), $playerIndex);
+        if (!$validator->validate($action)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $validator->getFirstError(),
+                'errors' => $validator->getErrors(),
+            ], 422);
+        }
+
+        // 5. Normalizza il flag scopa (#) — il client non deve sapere se è scopa.
+        $action = $this->normalizeScopaFlag($action, $engine->getState());
+
+        // 6. Esecuzione mossa
+        $engine->applyAction($playerIndex, $action);
 
 
         // Se la partita è finita, aggiorna lo stato del gioco e non inviare aggiornamenti WebSocket
         if ($engine->getState()->isGameOver) {
+            $scores = $engine->getState()->scores->toArray();
+            $winnerPid = $engine->getState()->scores->getWinner();
+            $winnerUserId = match ($winnerPid) {
+                'p1' => $game->player_1_id,
+                'p2' => $game->player_2_id,
+                default => null,
+            };
+
             $game->status = GameStateEnum::FINISHED;
+            $game->winner_id = $winnerUserId;
+            $game->final_score_p1 = $scores['p1'];
+            $game->final_score_p2 = $scores['p2'];
             $game->save();
         } else {
             // Invio WebSocket del nuovo stato
@@ -146,7 +181,7 @@ class GameController extends Controller
         GameEvent::create([
             'game_id' => $gameId,
             'sequence_number' => $events->count() + 1,
-            'actor_id' => $this->getLoggedPlayerIndex($game),
+            'actor_id' => $playerIndex,
             'pgn_action' => $action,
         ]);
 
@@ -157,5 +192,17 @@ class GameController extends Controller
         ]);
     }
 
-
+    private function normalizeScopaFlag(string $action, \App\GameEngine\GameState $stateBefore): string
+    {
+        $parsed = ScopaNotationParser::parse($action);
+        if ($parsed['type'] !== \App\GameEngine\GameConstants::TYPE_CARD_PLAY) {
+            return $action;
+        }
+        if (empty($parsed['targets'])) {
+            return rtrim($action, '#');
+        }
+        $isScopa = (count($parsed['targets']) === count($stateBefore->table));
+        $base = rtrim($action, '#');
+        return $isScopa ? $base . '#' : $base;
+    }
 }
