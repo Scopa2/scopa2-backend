@@ -15,7 +15,7 @@ class GameFinished implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $results;
-    private $gameId;
+    public string $gameId;
 
     public function __construct($results, string $gameId)
     {

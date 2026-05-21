@@ -7,14 +7,11 @@ use App\GameEngine\GameState;
 use App\GameEngine\GameUtilities;
 use App\GameEngine\ScopaEngine;
 use App\GameEngine\ScopaNotationParser;
-use App\Http\Requests\GameActionRequest;
 use App\Models\Game;
 use App\Models\GameEvent;
-use Illuminate\Support\Collection;
 
 class MoveValidator
 {
-    private ScopaEngine $engine;
     private GameState $state;
     private string $pid;
     private array $errors = [];
@@ -28,125 +25,212 @@ class MoveValidator
             ->orderBy('sequence_number')
             ->get();
 
-        $this->engine = new ScopaEngine($game->seed);
-        $this->engine->replay($events->all());
-        $this->state = $this->engine->getState();
+        $engine = new ScopaEngine($game->seed);
+        $engine->replay($events->all());
+        $this->state = $engine->getState();
     }
 
-    /**
-     * Validate a move action
-     */
+    public static function fromState(GameState $state, string $pid): self
+    {
+        $instance = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $instance->state = $state;
+        $instance->pid = $pid;
+        $instance->errors = [];
+        return $instance;
+    }
+
     public function validate(string $action): bool
     {
         $this->errors = [];
 
-        // Check if it's the player's turn
-        if (!($this->state->currentTurnPlayer === $this->pid)) {
+        if ($this->state->currentTurnPlayer !== $this->pid) {
             $this->errors[] = "It's not your turn.";
             return false;
         }
 
-        $action = ScopaNotationParser::parse($action);
+        $parsed = ScopaNotationParser::parse($action);
 
-        switch ($action['type']) {
+        switch ($parsed['type']) {
             case GameConstants::TYPE_SHOP_BUY:
-                //TODO: Implement buy validation logic
-                break; // NON cambia turno
+                return $this->validateBuyAction($parsed['santo_id'], $parsed['payment'] ?? []);
 
             case GameConstants::TYPE_SANTO_USE:
-                //TODO: Implement modifier use validation logic
-                break; // NON cambia turno
+                return $this->validateUseAction($parsed['santo_id'], $parsed['params'] ?? []);
 
             case GameConstants::TYPE_CARD_PLAY:
-                //set parsed values in the request
-                return $this->validatePlayCard($action['card'], $action['targets']);
+                return $this->validatePlayCard(
+                    $parsed['card'],
+                    $parsed['targets'],
+                    $parsed['is_scopa'] ?? false
+                );
         }
 
-        return true;
+        $this->errors[] = "Unknown action type.";
+        return false;
     }
 
-    /**
-     * Validate playing a card from hand
-     */
-    private function validatePlayCard(string $card, array $targets): bool
+    private function validatePlayCard(string $card, array $targets, bool $isScopa): bool
     {
-        $state = $this->engine->getState();
+        $player = $this->state->players->get($this->pid);
 
-        // Check if player has this card in hand
-        if (!$state->players->get($this->pid)->hasCardInHand($card)) {
+        if (!$player->hasCardInHand($card)) {
             $this->errors[] = "You don't have the card {$card} in your hand.";
             return false;
         }
 
-        // If capturing, validate the capture
-        if (!empty($targets)) {
-            return $this->validateCapture($card, $targets);
-        }
-        return true;
-    }
-
-    /**
-     * Validate a capture action
-     */
-    private function validateCapture(string $playedCard, array $capturedCards): bool
-    {
-        $tableCards = $this->state->table;
-
-        // Check if all captured cards are on the table
-        foreach ($capturedCards as $capCardNotation) {
-            if (!in_array($capCardNotation, $tableCards)) {
-                $this->errors[] = "Captured card {$capCardNotation} is not on the table.";
+        if (empty($targets)) {
+            // Discard. Scopa flag must be false (no capture, table never empties via discard).
+            if ($isScopa) {
+                $this->errors[] = "Cannot mark scopa on a discard.";
                 return false;
             }
+            return true;
         }
 
-        // Validate sum: captured cards must sum to played card value
-        $capturedSum = 0;
-        foreach ($capturedCards as $capCardNotation) {
-            $capturedSum += GameUtilities::getCardValue($capCardNotation);
+        if (!$this->validateCapture($card, $targets)) {
+            return false;
         }
 
-        if ($capturedSum !== ($playerCardValue = GameUtilities::getCardValue($playedCard))) {
-            $this->errors[] = "Invalid capture: the sum of captured cards ({$capturedSum}) must equal the played card value ({$playerCardValue}).";
+        // Scopa flag = true iff capturing exactly the whole table.
+        $tableEmptiedAfterCapture = (count($targets) === count($this->state->table));
+        if ($isScopa !== $tableEmptiedAfterCapture) {
+            $this->errors[] = $isScopa
+                ? "Scopa flag set but capture does not empty the table."
+                : "Capture empties the table — scopa flag (#) required.";
             return false;
         }
 
         return true;
     }
 
-
-    /**
-     * Validate a buy action
-     */
-    private function validateBuyAction(string $action): bool
+    private function validateCapture(string $playedCard, array $capturedCards): bool
     {
-        // TODO: Implement buy validation logic
+        $playedValue = GameUtilities::getCardValue($this->state->getEffectiveCard($playedCard));
+
+        // Each captured card must be currently on the table.
+        foreach ($capturedCards as $capCard) {
+            if (!in_array($capCard, $this->state->table, true)) {
+                $this->errors[] = "Captured card {$capCard} is not on the table.";
+                return false;
+            }
+        }
+
+        // Duplicates in targets list = trying to take the same card twice.
+        if (count(array_unique($capturedCards)) !== count($capturedCards)) {
+            $this->errors[] = "Duplicate capture target.";
+            return false;
+        }
+
+        // Capture priority (regola classica Scopa): if any single table card matches played value exactly,
+        // the player MUST capture that single card. Sum captures are forbidden when an exact match exists.
+        $exactMatches = [];
+        foreach ($this->state->table as $tc) {
+            if (GameUtilities::getCardValue($this->state->getEffectiveCard($tc)) === $playedValue) {
+                $exactMatches[] = $tc;
+            }
+        }
+
+        if (!empty($exactMatches)) {
+            if (count($capturedCards) !== 1) {
+                $this->errors[] = "Exact match available: must capture a single card of value {$playedValue}.";
+                return false;
+            }
+            $captured = $capturedCards[0];
+            if (GameUtilities::getCardValue($this->state->getEffectiveCard($captured)) !== $playedValue) {
+                $this->errors[] = "Must capture an exact-value card (value {$playedValue}).";
+                return false;
+            }
+            return true;
+        }
+
+        // Sum capture: sum of captured values must equal played value.
+        $sum = 0;
+        foreach ($capturedCards as $capCard) {
+            $sum += GameUtilities::getCardValue($this->state->getEffectiveCard($capCard));
+        }
+        if ($sum !== $playedValue) {
+            $this->errors[] = "Invalid capture: captured sum ({$sum}) must equal played value ({$playedValue}).";
+            return false;
+        }
+
         return true;
     }
 
-    /**
-     * Validate a use action
-     */
-    private function validateUseAction(string $action): bool
+    private function validateBuyAction(string $santoId, array $payment): bool
     {
-        // TODO: Implement use validation logic
+        if (!isset(GameConstants::SANTI[$santoId])) {
+            $this->errors[] = "Unknown santo: {$santoId}.";
+            return false;
+        }
+
+        $inShop = false;
+        foreach ($this->state->shop as $shopSlot) {
+            if (($shopSlot['id'] ?? null) === $santoId) {
+                $inShop = true;
+                break;
+            }
+        }
+        if (!$inShop) {
+            $this->errors[] = "Santo {$santoId} not available in shop.";
+            return false;
+        }
+
+        $player = $this->state->players->get($this->pid);
+
+        foreach ($payment as $card) {
+            if (!$player->hasCardCaptured($card)) {
+                $this->errors[] = "Payment card {$card} not in captured pile.";
+                return false;
+            }
+        }
+
+        if (count(array_unique($payment)) !== count($payment)) {
+            $this->errors[] = "Duplicate payment card.";
+            return false;
+        }
+
+        $santoClass = GameConstants::SANTI[$santoId];
+        $cost = $santoClass::$cost ?? 0;
+
+        $sacrificed = 0;
+        foreach ($payment as $card) {
+            $sacrificed += GameUtilities::getCardBloodValue($this->state->getEffectiveCard($card));
+        }
+
+        if ($sacrificed < $cost) {
+            $missing = $cost - $sacrificed;
+            if ($player->blood < $missing) {
+                $this->errors[] = "Insufficient blood: need {$missing} more, have {$player->blood}.";
+                return false;
+            }
+        }
+
         return true;
     }
 
-    /**
-     * Get validation errors
-     */
+    private function validateUseAction(string $santoId, array $params): bool
+    {
+        if (!isset(GameConstants::SANTI[$santoId])) {
+            $this->errors[] = "Unknown santo: {$santoId}.";
+            return false;
+        }
+
+        $player = $this->state->players->get($this->pid);
+        if (!in_array($santoId, $player->santi, true)) {
+            $this->errors[] = "You do not own santo {$santoId}.";
+            return false;
+        }
+
+        return true;
+    }
+
     public function getErrors(): array
     {
         return $this->errors;
     }
 
-    /**
-     * Get first error message
-     */
     public function getFirstError(): ?string
     {
         return $this->errors[0] ?? null;
     }
 }
-

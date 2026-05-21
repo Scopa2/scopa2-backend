@@ -133,3 +133,173 @@ test('getFirstError returns string when error exists', function () {
 
     expect($validator->getFirstError())->toBeString();
 });
+
+test('scopa flag required when capture empties table', function () {
+    // Forge state: single table card + hand card with matching value.
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['7D'];
+    $state->players->p1->hand = ['7C', '3B', '2S'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+
+    // Without # — should reject.
+    expect($validator->validate('7Cx7D'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('scopa');
+
+    // With # — should accept.
+    expect($validator->validate('7Cx7D#'))->toBeTrue();
+});
+
+test('scopa flag rejected when table not emptied', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['7D', '3S'];
+    $state->players->p1->hand = ['7C', '4B', '2S'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('7Cx7D#'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('does not empty');
+});
+
+test('scopa flag rejected on discard', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = [];
+    $state->players->p1->hand = ['7C', '4B', '2S'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('7C#'))->toBeFalse();
+});
+
+test('exact match wins over sum capture', function () {
+    // Played 7; table has 7D AND 3C+4B (sum 7). Must take 7D alone.
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['7D', '3C', '4B'];
+    $state->players->p1->hand = ['7S', '2D', '1B'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+
+    // Sum capture (3C+4B) when 7D available — must reject.
+    expect($validator->validate('7Sx3C+4B'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('Exact match');
+
+    // Exact capture — accepted.
+    expect($validator->validate('7Sx7D'))->toBeTrue();
+});
+
+test('sum capture allowed when no exact match', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['3C', '4B', '2S'];
+    $state->players->p1->hand = ['7D', '5C', '1B'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('7Dx3C+4B'))->toBeTrue();
+});
+
+test('duplicate capture targets rejected', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['3C', '4B'];
+    $state->players->p1->hand = ['6D'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('6Dx3C+3C'))->toBeFalse();
+});
+
+test('buy rejects unknown santo', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('$XYZ()'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('Unknown santo');
+});
+
+test('buy rejects santo not in shop', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->shop = [
+        ['id' => 'BIA', 'name' => 'San Biagio', 'description' => '', 'cost' => 3, 'expiry' => 3],
+    ];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('$PAN()'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('not available');
+});
+
+test('buy rejects payment card not in captured', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->shop = [
+        ['id' => 'BIA', 'name' => 'San Biagio', 'description' => '', 'cost' => 3, 'expiry' => 3],
+    ];
+    $state->players->p1->captured = ['3C'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('$BIA(7D)'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('not in captured');
+});
+
+test('buy rejects insufficient blood and payment', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->shop = [
+        ['id' => 'BIA', 'name' => 'San Biagio', 'description' => '', 'cost' => 3, 'expiry' => 3],
+    ];
+    // Captured card with blood value below cost, no blood reserve.
+    $state->players->p1->captured = ['1B']; // value 1+11→11, suit B adds 0 → wait, getCardBloodValue: 1→11 base, B adds 0 → 11
+    // Use a tiny card to force insufficient
+    $state->players->p1->captured = ['2B']; // 2+0=2; cost=3; need 1 more, have 0 blood
+    $state->players->p1->blood = 0;
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('$BIA(2B)'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('Insufficient blood');
+});
+
+test('buy accepts when payment + blood cover cost', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->shop = [
+        ['id' => 'BIA', 'name' => 'San Biagio', 'description' => '', 'cost' => 3, 'expiry' => 3],
+    ];
+    $state->players->p1->captured = ['7D']; // 7 + 3 (D) = 10, well over cost 3
+    $state->players->p1->blood = 0;
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('$BIA(7D)'))->toBeTrue();
+});
+
+test('use rejects santo not owned', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->players->p1->santi = [];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('@BIA'))->toBeFalse()
+        ->and($validator->getFirstError())->toContain('do not own');
+});
+
+test('use accepts when player owns santo', function () {
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->players->p1->santi = ['BIA'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('@BIA'))->toBeTrue();
+});
+
+test('capture honors mutations via getEffectiveCard', function () {
+    // Mutate 3C → 7C. Played 7S should be able to capture mutated 3C.
+    $state = (new ScopaEngine(VALIDATOR_SEED))->getState();
+    $state->table = ['3C'];
+    $state->mutations = ['3C' => '7C'];
+    $state->players->p1->hand = ['7S'];
+    $state->currentTurnPlayer = 'p1';
+
+    $validator = MoveValidator::fromState($state, 'p1');
+    expect($validator->validate('7Sx3C#'))->toBeTrue();
+});

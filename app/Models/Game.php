@@ -16,6 +16,9 @@ class Game extends Model
         'id',
         'player_1_id',
         'player_2_id',
+        'winner_id',
+        'final_score_p1',
+        'final_score_p2',
         'seed',
         'status',
         'has_bot',
@@ -39,5 +42,10 @@ class Game extends Model
     public function player2(): BelongsTo
     {
         return $this->belongsTo(User::class, 'player_2_id');
+    }
+
+    public function winner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'winner_id');
     }
 }
