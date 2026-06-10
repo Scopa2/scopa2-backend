@@ -6,12 +6,13 @@ architecture: replication   # Master + Replicas (no cluster mode)
 auth:
   enabled: false            # For local dev; enable + set password for production
 
-replica:
-  replicaCount: 2           # 1 Master + 2 Replicas = 3 nodes per region
-
 sentinel:
   enabled: true             # Auto-failover: if Master dies, a Replica promotes
   quorum: 2
+  # Failover must beat the StatefulSet pod restart (~30s), otherwise the dead
+  # master comes back before Sentinel declares it down and no election happens.
+  downAfterMilliseconds: 5000
+  failoverTimeout: 18000
 
 master:
   resources:
@@ -23,6 +24,9 @@ master:
       memory: "256Mi"
 
 replica:
+  # With sentinel.enabled this is the TOTAL node count (master is elected
+  # among them): 3 nodes = 1 master + 2 replicas, 3 sentinels, quorum 2.
+  replicaCount: 3
   resources:
     requests:
       cpu: "50m"
