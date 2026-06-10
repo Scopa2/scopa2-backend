@@ -107,6 +107,27 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 ubuntu@10.69.69.111 "mkdir -p ~/scopa2-deployment"
           scp -i ~/.ssh/id_ed25519 -r helm ubuntu@10.69.69.111:~/scopa2-deployment/
 
+      - name: Ensure Redis (both regions)
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ubuntu@10.69.69.111 << 'EOF'
+            set -e
+            cd ~/scopa2-deployment
+
+            echo "🧱 Ensuring Redis in cache-eu..."
+            helm upgrade --install eu-scopa-redis bitnami/redis \
+              -n cache-eu --create-namespace \
+              -f helm/redis-values.yaml --version 25.3.9 \
+              --wait --timeout 5m
+
+            echo "🧱 Ensuring Redis in cache-us..."
+            helm upgrade --install us-scopa-redis bitnami/redis \
+              -n cache-us --create-namespace \
+              -f helm/redis-values.yaml --version 25.3.9 \
+              --wait --timeout 5m
+
+            echo "✅ Redis ready in both regions"
+          EOF
+
       - name: Deploy to region-eu
         run: |
           ssh -i ~/.ssh/id_ed25519 ubuntu@10.69.69.111 << 'EOF'
@@ -119,6 +140,7 @@ jobs:
               -f helm/values-eu.yaml \
               --set image.tag=main-${{ steps.vars.outputs.short_sha }} \
               -n region-eu \
+              --create-namespace \
               --wait \
               --timeout 5m
 
@@ -147,6 +169,7 @@ jobs:
               -f helm/values-us.yaml \
               --set image.tag=main-${{ steps.vars.outputs.short_sha }} \
               -n region-us \
+              --create-namespace \
               --wait \
               --timeout 5m
 
