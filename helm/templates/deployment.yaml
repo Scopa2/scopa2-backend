@@ -38,15 +38,17 @@ spec:
               protocol: TCP
 
           # --- PROBES ---
+          # /up is Laravel's health route: it doesn't touch Redis/session,
+          # so a dead cache region degrades the app instead of crashlooping it
           livenessProbe:
             httpGet:
-              path: /
+              path: /up
               port: http
             initialDelaySeconds: 15
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /
+              path: /up
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10

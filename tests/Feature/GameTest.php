@@ -31,15 +31,13 @@ test('created game is persisted in database', function () {
     ]);
 });
 
-// BUG: GameController::create() sets status=PLAYING even with no player_2.
-// It should be WAITING_FOR_PLAYERS until a second player joins.
-test('created game without player_2 has PLAYING status (known bug: should be WAITING_FOR_PLAYERS)', function () {
+test('created game without player_2 has WAITING_FOR_PLAYERS status', function () {
     [, $headers] = actingAsUser();
 
     $response = $this->withHeaders($headers)->postJson('/api/games');
     $gameId = $response->json('game_id');
 
-    $this->assertDatabaseHas('games', ['id' => $gameId, 'status' => 'playing']);
+    $this->assertDatabaseHas('games', ['id' => $gameId, 'status' => 'waiting_for_players']);
 });
 
 // --- Join game ---
