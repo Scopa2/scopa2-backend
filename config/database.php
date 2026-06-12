@@ -153,6 +153,8 @@ return [
         ],
 
         'default' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'port' => (int) env('REDIS_PORT', 6379),
             'sentinel_host' => env('REDIS_SENTINEL_HOST', '127.0.0.1'),
             'sentinel_port' => (int) env('REDIS_SENTINEL_PORT', 26379),
             'sentinel_service' => env('REDIS_SENTINEL_SERVICE', 'mymaster'),
@@ -165,6 +167,8 @@ return [
         ],
 
         'cache' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'port' => (int) env('REDIS_PORT', 6379),
             'sentinel_host' => env('REDIS_SENTINEL_HOST', '127.0.0.1'),
             'sentinel_port' => (int) env('REDIS_SENTINEL_PORT', 26379),
             'sentinel_service' => env('REDIS_SENTINEL_SERVICE', 'mymaster'),
